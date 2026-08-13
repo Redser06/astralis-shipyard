@@ -24,8 +24,10 @@ import {
   Sun,
   Camera,
   Layers,
-  Thermometer,
-  Activity
+  Cpu,
+  Radio,
+  Sliders,
+  Grid
 } from 'lucide-react';
 
 // --- Web Audio Synthesizer ---
@@ -91,6 +93,45 @@ class SoundEngine {
 }
 const sfx = new SoundEngine();
 
+// --- Architectural Paradigms (Spacecraft Archetypes) ---
+const HULL_ARCHITECTURES = [
+  {
+    id: 'angular_stealth',
+    name: 'Angular Stealth Frigate',
+    tag: 'Chiseled Radar-Deflecting Plates',
+    desc: 'Faceted angular geometric armor with razor-sharp chines and low-observability weapon sponsons.',
+    icon: 'Shield'
+  },
+  {
+    id: 'industrial_expanse',
+    name: 'Industrial Heavy Modular',
+    tag: 'Zero-G Exposed Trusses & Radiators',
+    desc: 'Unapologetic space architecture with massive heat radiator fins, structural girders, and outboard engine pods.',
+    icon: 'Boxes'
+  },
+  {
+    id: 'brutalist_dreadnought',
+    name: 'Brutalist Battlecruiser',
+    tag: 'Armored Citadel & Heavy Prow',
+    desc: 'Heavily armored hammerhead prow, elevated command tower, spinal mass-driver trenches, and flanked battery turrets.',
+    icon: 'Crosshair'
+  },
+  {
+    id: 'outrigger_science',
+    name: 'Outrigger Long-Range Science',
+    tag: 'Twin Boom Spars & Sensor Mast',
+    desc: 'Dual outrigger nacelle booms with extensive telemetry arrays, communications dishes, and habitat modules.',
+    icon: 'Radio'
+  },
+  {
+    id: 'aerodynamic_sleek',
+    name: 'Aerodynamic Hybrid Cruiser',
+    tag: 'Smooth Swept Bezier Lathe',
+    desc: 'Smooth lofted delta airframe engineered for atmospheric reentry and high-speed orbital interception.',
+    icon: 'Rocket'
+  }
+];
+
 // --- Tech Catalog & Database ---
 const COMPONENT_DATABASE = {
   sublight: [
@@ -132,9 +173,10 @@ const COMPONENT_DATABASE = {
 // Preset Ship Templates
 const SHIP_PRESETS = [
   {
-    id: 'sentinel_interceptor',
-    name: 'VOD-3 Sentinel Interceptor',
-    class: 'Stealth Interceptor',
+    id: 'stealth_frigate',
+    name: 'SF-44 Phantom Knife',
+    architecture: 'angular_stealth',
+    class: 'Stealth Frigate',
     sublight: 'mpd_thruster',
     ftl: 'alcubierre_ring',
     weapons: 'plasma_lance',
@@ -142,11 +184,26 @@ const SHIP_PRESETS = [
     fuel: 'antimatter_pods',
     material: 'carbon_nanotube',
     accentColor: '#38BDF8',
-    stats: { speed: 88, maneuver: 94, firepower: 72, shield: 65, jump: 32 }
+    stats: { speed: 92, armor: 70, firepower: 80, stealth: 98, warp: 32 }
   },
   {
-    id: 'aegis_battlecruiser',
-    name: 'BC-9 Aegis Heavy Battlecruiser',
+    id: 'expanse_hauler',
+    name: 'EX-9 Rocinante Heavy Rig',
+    architecture: 'industrial_expanse',
+    class: 'Industrial Zero-G Gunship',
+    sublight: 'fusion_torch',
+    ftl: 'hyper_shunt',
+    weapons: 'gauss_cannons',
+    sensors: 'tachyon_scanner',
+    fuel: 'd_he3_bottles',
+    material: 'duranium',
+    accentColor: '#F59E0B',
+    stats: { speed: 85, armor: 88, firepower: 84, stealth: 45, warp: 18 }
+  },
+  {
+    id: 'leviathan_cruiser',
+    name: 'BC-99 Leviathan Dreadnought',
+    architecture: 'brutalist_dreadnought',
     class: 'Heavy Battlecruiser',
     sublight: 'fusion_torch',
     ftl: 'graviton_singularity',
@@ -154,21 +211,22 @@ const SHIP_PRESETS = [
     sensors: 'tachyon_scanner',
     fuel: 'zero_point_core',
     material: 'titanium_aerogel',
-    accentColor: '#F59E0B',
-    stats: { speed: 64, maneuver: 55, firepower: 96, shield: 92, jump: 95 }
+    accentColor: '#F43F5E',
+    stats: { speed: 60, armor: 99, firepower: 98, stealth: 30, warp: 95 }
   },
   {
-    id: 'helios_explorer',
-    name: 'EX-7 Helios Deep Explorer',
-    class: 'Scientific Explorer',
+    id: 'helios_science',
+    name: 'SCI-7 Horizon Explorer',
+    architecture: 'outrigger_science',
+    class: 'Long-Range Science Cruiser',
     sublight: 'ion_pulse',
     ftl: 'alcubierre_ring',
     weapons: 'tachyon_disruptor',
     sensors: 'tachyon_scanner',
-    fuel: 'antimatter_pods',
+    fuel: 'zero_point_core',
     material: 'chronium_cloak',
     accentColor: '#10B981',
-    stats: { speed: 75, maneuver: 80, firepower: 60, shield: 78, jump: 45 }
+    stats: { speed: 78, armor: 65, firepower: 62, stealth: 75, warp: 60 }
   }
 ];
 
@@ -179,21 +237,29 @@ export default function AstralisShipyard() {
   const [isTestBurning, setIsTestBurning] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   
-  // --- 3D RENDERING CAPABILITIES STATE ---
+  // --- 3D RENDERING CAPABILITIES & PROTRUSIONS STATE ---
   const [renderMode, setRenderMode] = useState('pbr'); // pbr | wireframe | xray | thermal
-  const [autoRotate, setAutoRotate] = useState(false); // Default to paused as per user instruction
+  const [autoRotate, setAutoRotate] = useState(false); // Default to paused
   const [rotationSpeed, setRotationSpeed] = useState(1.0);
-  const [lightIntensity, setLightIntensity] = useState(2.2); // Ultra bright default lighting
-  const [showGantryLasers, setShowGantryLasers] = useState(true);
+  const [lightIntensity, setLightIntensity] = useState(2.4); // Ultra bright default lighting
+  
+  // Spacecraft Protrusion Hardware Toggles
+  const [protrusions, setProtrusions] = useState({
+    radiatorPanels: true,
+    sensorMasts: true,
+    outriggerTrusses: true,
+    rcsBlocks: true,
+    turretSponsons: true
+  });
 
   // Spline Sculpting State (Bezier Points [x, y])
   const [splinePoints, setSplinePoints] = useState([
-    { id: 0, x: 20, y: 150, label: 'Nose Tip' },
-    { id: 1, x: 90, y: 110, label: 'Cockpit Contour' },
-    { id: 2, x: 200, y: 80, label: 'Mid Waist' },
-    { id: 3, x: 310, y: 50, label: 'Wing Root Sweep' },
-    { id: 4, x: 420, y: 110, label: 'Engine Nacelle' },
-    { id: 5, x: 460, y: 150, label: 'Aft Exhaust' }
+    { id: 0, x: 20, y: 150, label: 'Prow Tip' },
+    { id: 1, x: 90, y: 100, label: 'Forward Chamfer' },
+    { id: 2, x: 200, y: 70, label: 'Mid Hull Waist' },
+    { id: 3, x: 310, y: 40, label: 'Armor Sponson Root' },
+    { id: 4, x: 420, y: 100, label: 'Aft Nacelle Mount' },
+    { id: 5, x: 460, y: 150, label: 'Engine Exhaust' }
   ]);
   const [selectedSplinePoint, setSelectedSplinePoint] = useState(null);
 
@@ -227,7 +293,7 @@ export default function AstralisShipyard() {
   const [aiPrompt, setAiPrompt] = useState('');
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [aiChatLog, setAiChatLog] = useState([
-    { sender: 'ai', text: 'Greetings, Architect. Astralis Shipyard CAD Matrix online. Describe your starship concept, tactical role, or engine requirements to instantly forge custom 3D ship configurations.' }
+    { sender: 'ai', text: 'Greetings, Architect. Astralis Zero-G CAD Matrix online. Select an architectural archetype (Angular Stealth, Industrial Expanse, Brutalist Dreadnought, or Outrigger Science) and customize non-aerodynamic space protrusions.' }
   ]);
 
   // Three.js Canvas Reference
@@ -237,15 +303,16 @@ export default function AstralisShipyard() {
   const shipGroupRef = useRef(null);
   const cameraRef = useRef(null);
   const particlesRef = useRef(null);
+  const radiatorGlowRef = useRef(null);
   const sparksRef = useRef(null);
   const lightsGroupRef = useRef(null);
   const gantryRef = useRef(null);
   const animationFrameId = useRef(null);
   const isDraggingRef = useRef(false);
   const prevMousePosRef = useRef({ x: 0, y: 0 });
-  const cameraAngleRef = useRef({ theta: 0.6, phi: 1.1, radius: 24 });
+  const cameraAngleRef = useRef({ theta: 0.6, phi: 1.1, radius: 25 });
 
-  // --- Three.js Procedural Starship Builder ---
+  // --- Three.js Procedural Starship Engine ---
   useEffect(() => {
     if (!mountRef.current) return;
     const width = mountRef.current.clientWidth;
@@ -261,18 +328,18 @@ export default function AstralisShipyard() {
     cameraRef.current = camera;
     updateCameraPosition();
 
-    // 2. Renderer with High-Fidelity PBR Tone Mapping
+    // 2. High-Performance PBR Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.4;
+    renderer.toneMappingExposure = 1.45;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     rendererRef.current = renderer;
     mountRef.current.innerHTML = '';
     mountRef.current.appendChild(renderer.domElement);
 
-    // 3. Dynamic Studio Lighting Rig (Significantly boosted)
+    // 3. Dynamic Studio Multi-Point Lighting
     const lightsGroup = new THREE.Group();
     lightsGroupRef.current = lightsGroup;
     scene.add(lightsGroup);
@@ -283,7 +350,7 @@ export default function AstralisShipyard() {
     shipGroupRef.current = shipGroup;
     scene.add(shipGroup);
 
-    // 5. Build Environment & Stars
+    // 5. Environment
     buildEnvironment(scene, environment);
 
     // 6. Build Initial Starship Mesh
@@ -308,7 +375,7 @@ export default function AstralisShipyard() {
     const onMouseUp = () => { isDraggingRef.current = false; };
     const onWheel = (e) => {
       e.preventDefault();
-      cameraAngleRef.current.radius = Math.max(7, Math.min(65, cameraAngleRef.current.radius + e.deltaY * 0.02));
+      cameraAngleRef.current.radius = Math.max(7, Math.min(70, cameraAngleRef.current.radius + e.deltaY * 0.02));
       updateCameraPosition();
     };
 
@@ -317,34 +384,41 @@ export default function AstralisShipyard() {
     window.addEventListener('mouseup', onMouseUp);
     dom.addEventListener('wheel', onWheel, { passive: false });
 
-    // 8. High-FPS Render Loop
+    // 8. Render Loop
     let clock = new THREE.Clock();
     const animate = () => {
       animationFrameId.current = requestAnimationFrame(animate);
       const delta = clock.getDelta();
       const elapsed = clock.getElapsedTime();
 
-      // Precise User-Controlled Auto Rotation (Can be stopped or sped up)
+      // Rotation Control
       if (autoRotate && !isDraggingRef.current) {
         cameraAngleRef.current.theta += 0.005 * rotationSpeed;
         updateCameraPosition();
       }
 
-      // Thruster Particle Animation
+      // Thruster Exhaust Particles
       if (particlesRef.current) {
         const positions = particlesRef.current.geometry.attributes.position.array;
         for (let i = 2; i < positions.length; i += 3) {
-          positions[i] -= (isTestBurning ? 1.1 : 0.28);
-          if (positions[i] < -20) {
-            positions[i] = -4.5;
-            positions[i - 2] = (Math.random() - 0.5) * 1.4;
-            positions[i - 1] = (Math.random() - 0.5) * 0.9;
+          positions[i] -= (isTestBurning ? 1.2 : 0.3);
+          if (positions[i] < -22) {
+            positions[i] = -5.0;
+            positions[i - 2] = (Math.random() - 0.5) * 1.5;
+            positions[i - 1] = (Math.random() - 0.5) * 1.0;
           }
         }
         particlesRef.current.geometry.attributes.position.needsUpdate = true;
       }
 
-      // Welding Sparks Falling Animation
+      // Radiator Heat Shimmer Glow
+      if (radiatorGlowRef.current) {
+        radiatorGlowRef.current.material.opacity = isTestBurning 
+          ? 0.95 + Math.sin(elapsed * 12) * 0.05 
+          : 0.65 + Math.sin(elapsed * 2) * 0.1;
+      }
+
+      // Welding Sparks Falling
       if (sparksRef.current) {
         const sparkPos = sparksRef.current.geometry.attributes.position.array;
         for (let i = 1; i < sparkPos.length; i += 3) {
@@ -358,14 +432,14 @@ export default function AstralisShipyard() {
         sparksRef.current.geometry.attributes.position.needsUpdate = true;
       }
 
-      // Gentle Ship Hover Bobbing
+      // Ship Hover Bobbing
       if (shipGroupRef.current) {
-        shipGroupRef.current.position.y = Math.sin(elapsed * 1.6) * 0.15;
+        shipGroupRef.current.position.y = Math.sin(elapsed * 1.5) * 0.12;
       }
 
-      // Gantry Laser Scanner Sweep
-      if (gantryRef.current && showGantryLasers) {
-        gantryRef.current.rotation.y = Math.sin(elapsed * 0.5) * 0.12;
+      // Gantry Motion
+      if (gantryRef.current) {
+        gantryRef.current.rotation.y = Math.sin(elapsed * 0.4) * 0.08;
       }
 
       renderer.render(scene, camera);
@@ -395,53 +469,44 @@ export default function AstralisShipyard() {
     };
   }, []);
 
-  // Setup Studio Lighting Rig with Adjustable Multi-Point Illumination
+  // Multi-Point Studio Lighting Rig
   const setupStudioLighting = (group, intensityMultiplier) => {
     while (group.children.length > 0) group.remove(group.children[0]);
 
-    // 1. Ambient Fill Light
-    const ambientLight = new THREE.AmbientLight(0xdbeafe, 0.65 * intensityMultiplier);
+    const ambientLight = new THREE.AmbientLight(0xdbeafe, 0.7 * intensityMultiplier);
     group.add(ambientLight);
 
-    // 2. Primary Sun Key Light (Top Right)
-    const keyLight = new THREE.DirectionalLight(0xffffff, 3.2 * intensityMultiplier);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 3.4 * intensityMultiplier);
     keyLight.position.set(24, 38, 24);
     group.add(keyLight);
 
-    // 3. Secondary Key Light (Top Left)
-    const keyLightLeft = new THREE.DirectionalLight(0xe0f2fe, 2.4 * intensityMultiplier);
+    const keyLightLeft = new THREE.DirectionalLight(0xe0f2fe, 2.5 * intensityMultiplier);
     keyLightLeft.position.set(-24, 32, 20);
     group.add(keyLightLeft);
 
-    // 4. Cyber Cyan Rim Light (Back Left)
-    const rimCyan = new THREE.DirectionalLight(0x38bdf8, 3.6 * intensityMultiplier);
+    const rimCyan = new THREE.DirectionalLight(0x38bdf8, 3.8 * intensityMultiplier);
     rimCyan.position.set(-26, -8, -26);
     group.add(rimCyan);
 
-    // 5. Warp Indigo / Magenta Rim Light (Back Right)
-    const rimMagenta = new THREE.DirectionalLight(0xa855f7, 2.8 * intensityMultiplier);
+    const rimMagenta = new THREE.DirectionalLight(0xa855f7, 3.0 * intensityMultiplier);
     rimMagenta.position.set(26, -10, -26);
     group.add(rimMagenta);
 
-    // 6. Top Overhead Spot Floodlight
-    const topSpot = new THREE.SpotLight(0xffffff, 4.0 * intensityMultiplier, 80, Math.PI / 3, 0.4);
+    const topSpot = new THREE.SpotLight(0xffffff, 4.5 * intensityMultiplier, 80, Math.PI / 3, 0.4);
     topSpot.position.set(0, 32, 0);
     group.add(topSpot);
 
-    // 7. Underhull Gantry Neon Light
-    const underGlow = new THREE.PointLight(0x38bdf8, 3.5 * intensityMultiplier, 45);
+    const underGlow = new THREE.PointLight(0x38bdf8, 3.8 * intensityMultiplier, 45);
     underGlow.position.set(0, -5, 0);
     group.add(underGlow);
   };
 
-  // Update Lighting when intensity slider changes
   useEffect(() => {
     if (lightsGroupRef.current) {
       setupStudioLighting(lightsGroupRef.current, lightIntensity);
     }
   }, [lightIntensity]);
 
-  // Update Camera Position Helper
   const updateCameraPosition = () => {
     if (!cameraRef.current) return;
     const { theta, phi, radius } = cameraAngleRef.current;
@@ -451,24 +516,17 @@ export default function AstralisShipyard() {
     cameraRef.current.lookAt(0, 0, 0);
   };
 
-  // Camera Presets
   const setCameraPreset = (presetName) => {
     if (soundEnabled) sfx.playClick();
-    if (presetName === 'isometric') {
-      cameraAngleRef.current = { theta: 0.6, phi: 1.1, radius: 24 };
-    } else if (presetName === 'top') {
-      cameraAngleRef.current = { theta: 0.0, phi: 0.15, radius: 28 };
-    } else if (presetName === 'side') {
-      cameraAngleRef.current = { theta: Math.PI / 2, phi: Math.PI / 2, radius: 22 };
-    } else if (presetName === 'front') {
-      cameraAngleRef.current = { theta: 0.0, phi: Math.PI / 2, radius: 20 };
-    } else if (presetName === 'rear') {
-      cameraAngleRef.current = { theta: Math.PI, phi: Math.PI / 2, radius: 22 };
-    }
+    if (presetName === 'isometric') cameraAngleRef.current = { theta: 0.6, phi: 1.1, radius: 25 };
+    else if (presetName === 'top') cameraAngleRef.current = { theta: 0.0, phi: 0.15, radius: 29 };
+    else if (presetName === 'side') cameraAngleRef.current = { theta: Math.PI / 2, phi: Math.PI / 2, radius: 23 };
+    else if (presetName === 'front') cameraAngleRef.current = { theta: 0.0, phi: Math.PI / 2, radius: 21 };
+    else if (presetName === 'rear') cameraAngleRef.current = { theta: Math.PI, phi: Math.PI / 2, radius: 23 };
     updateCameraPosition();
   };
 
-  // Build Procedural Environment (Drydock vs Nebula vs Asteroids)
+  // Build Environment
   const buildEnvironment = (scene, envType) => {
     const oldEnv = scene.getObjectByName('environment_container');
     if (oldEnv) scene.remove(oldEnv);
@@ -476,7 +534,7 @@ export default function AstralisShipyard() {
     const envContainer = new THREE.Group();
     envContainer.name = 'environment_container';
 
-    // 1. High-Density Starfield
+    // 1. Starfield
     const starCount = 2400;
     const starGeo = new THREE.BufferGeometry();
     const starPositions = new Float32Array(starCount * 3);
@@ -487,48 +545,40 @@ export default function AstralisShipyard() {
     }
     starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
     const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.9, transparent: true, opacity: 0.9 });
-    const starField = new THREE.Points(starGeo, starMat);
-    envContainer.add(starField);
+    envContainer.add(new THREE.Points(starGeo, starMat));
 
     if (envType === 'drydock') {
-      // Orbital Drydock Gantry with Holographic Floor Grid
       const grid = new THREE.GridHelper(50, 40, 0x38bdf8, 0x1e293b);
       grid.position.y = -6;
       envContainer.add(grid);
 
-      // Gantry Frame Columns & Laser Heads
       const gantryGroup = new THREE.Group();
       gantryRef.current = gantryGroup;
       const beamMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.9, roughness: 0.2 });
       const lightBeamMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
 
       for (let side of [-14, 14]) {
-        const colGeo = new THREE.BoxGeometry(1.4, 18, 1.4);
-        const col = new THREE.Mesh(colGeo, beamMat);
+        const col = new THREE.Mesh(new THREE.BoxGeometry(1.4, 18, 1.4), beamMat);
         col.position.set(side, 3, 0);
         gantryGroup.add(col);
 
-        const armGeo = new THREE.BoxGeometry(9, 0.9, 0.9);
-        const arm = new THREE.Mesh(armGeo, beamMat);
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(9, 0.9, 0.9), beamMat);
         arm.position.set(side > 0 ? side - 4.5 : side + 4.5, 8.5, 0);
         gantryGroup.add(arm);
 
-        // Laser Projector Tip
         const laserTip = new THREE.Mesh(new THREE.ConeGeometry(0.35, 1.0, 12), lightBeamMat);
         laserTip.rotation.z = side > 0 ? Math.PI / 2 : -Math.PI / 2;
         laserTip.position.set(side > 0 ? side - 9 : side + 9, 8.5, 0);
         gantryGroup.add(laserTip);
 
-        // Laser Beam Cylinder Line
-        const laserBeamGeo = new THREE.CylinderGeometry(0.04, 0.04, 8, 8);
-        laserBeamGeo.rotateZ(side > 0 ? -Math.PI / 4 : Math.PI / 4);
-        const laserBeam = new THREE.Mesh(laserBeamGeo, new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.65 }));
+        const laserBeam = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 8, 8), new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.65 }));
+        laserBeam.rotateZ(side > 0 ? -Math.PI / 4 : Math.PI / 4);
         laserBeam.position.set(side > 0 ? side - 6 : side + 6, 5.5, 0);
         gantryGroup.add(laserBeam);
       }
       envContainer.add(gantryGroup);
 
-      // Drydock Welding Sparks Particles
+      // Welding Sparks
       const sparkCount = 80;
       const sparkGeo = new THREE.BufferGeometry();
       const sparkPos = new Float32Array(sparkCount * 3);
@@ -538,42 +588,31 @@ export default function AstralisShipyard() {
         sparkPos[i + 2] = (Math.random() - 0.5) * 8;
       }
       sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPos, 3));
-      const sparkMat = new THREE.PointsMaterial({ color: 0xf59e0b, size: 0.35, transparent: true, opacity: 0.95 });
-      const sparks = new THREE.Points(sparkGeo, sparkMat);
+      const sparks = new THREE.Points(sparkGeo, new THREE.PointsMaterial({ color: 0xf59e0b, size: 0.35, transparent: true, opacity: 0.95 }));
       sparksRef.current = sparks;
       envContainer.add(sparks);
 
-      // Distant Planet Sphere with Atmospheric Glow
-      const planetGeo = new THREE.SphereGeometry(65, 36, 36);
-      const planetMat = new THREE.MeshStandardMaterial({
-        color: 0x0284c7,
-        roughness: 0.75,
-        metalness: 0.15,
-        emissive: 0x0369a1,
-        emissiveIntensity: 0.25
-      });
-      const planet = new THREE.Mesh(planetGeo, planetMat);
+      // Planet
+      const planet = new THREE.Mesh(
+        new THREE.SphereGeometry(65, 36, 36),
+        new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.75, metalness: 0.15, emissive: 0x0369a1, emissiveIntensity: 0.25 })
+      );
       planet.position.set(130, -35, -190);
       envContainer.add(planet);
     } else if (envType === 'nebula') {
       const colors = [0x818cf8, 0xa855f7, 0x38bdf8, 0xec4899];
       for (let i = 0; i < 20; i++) {
-        const cloudGeo = new THREE.SphereGeometry(16 + Math.random() * 12, 16, 16);
-        const cloudMat = new THREE.MeshBasicMaterial({
-          color: colors[i % colors.length],
-          transparent: true,
-          opacity: 0.09,
-          wireframe: true
-        });
-        const cloud = new THREE.Mesh(cloudGeo, cloudMat);
+        const cloud = new THREE.Mesh(
+          new THREE.SphereGeometry(16 + Math.random() * 12, 16, 16),
+          new THREE.MeshBasicMaterial({ color: colors[i % colors.length], transparent: true, opacity: 0.09, wireframe: true })
+        );
         cloud.position.set((Math.random() - 0.5) * 140, (Math.random() - 0.5) * 90, (Math.random() - 0.5) * 140);
         envContainer.add(cloud);
       }
     } else if (envType === 'asteroid') {
       const astMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.85, metalness: 0.2 });
       for (let i = 0; i < 30; i++) {
-        const astGeo = new THREE.DodecahedronGeometry(1.6 + Math.random() * 3.0, 1);
-        const ast = new THREE.Mesh(astGeo, astMat);
+        const ast = new THREE.Mesh(new THREE.DodecahedronGeometry(1.6 + Math.random() * 3.0, 1), astMat);
         ast.position.set((Math.random() - 0.5) * 80, (Math.random() - 0.5) * 50 - 2, (Math.random() - 0.5) * 80);
         ast.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
         envContainer.add(ast);
@@ -584,28 +623,22 @@ export default function AstralisShipyard() {
   };
 
   useEffect(() => {
-    if (sceneRef.current) {
-      buildEnvironment(sceneRef.current, environment);
-    }
+    if (sceneRef.current) buildEnvironment(sceneRef.current, environment);
   }, [environment]);
 
-  // Rebuild Full 3D Starship Mesh with Multiple Diagnostic Rendering Modes
+  // --- MULTI-PARADIGM 3D STARSHIP MESH BUILDER ---
   const rebuildShipMesh = () => {
     if (!shipGroupRef.current) return;
     const group = shipGroupRef.current;
-    while (group.children.length > 0) {
-      group.remove(group.children[0]);
-    }
+    while (group.children.length > 0) group.remove(group.children[0]);
 
     const matConfig = COMPONENT_DATABASE.materials.find(m => m.id === currentShip.material) || COMPONENT_DATABASE.materials[0];
     const hullColor = new THREE.Color(matConfig.color);
     const accentColor = new THREE.Color(currentShip.accentColor);
+    const arch = currentShip.architecture || 'angular_stealth';
 
-    // Dynamic Materials based on Render Mode (PBR, Wireframe, X-Ray, Thermal)
-    let hullMat;
-    let canopyMat;
-    let glowMat;
-    let darkMat;
+    // Diagnostic Mode Materials
+    let hullMat, darkMat, glowMat, canopyMat, radiatorMat, trussMat;
 
     if (renderMode === 'pbr') {
       hullMat = new THREE.MeshStandardMaterial({
@@ -613,6 +646,8 @@ export default function AstralisShipyard() {
         roughness: matConfig.roughness,
         metalness: matConfig.metalness,
       });
+      darkMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.35, metalness: 0.9 });
+      glowMat = new THREE.MeshBasicMaterial({ color: accentColor });
       canopyMat = new THREE.MeshPhysicalMaterial({
         color: 0x38bdf8,
         metalness: 0.1,
@@ -620,123 +655,282 @@ export default function AstralisShipyard() {
         transmission: 0.88,
         transparent: true,
         opacity: 0.92,
-        reflectivity: 0.95,
-        clearcoat: 1.0,
-        clearcoatRoughness: 0.1
+        reflectivity: 0.95
       });
-      glowMat = new THREE.MeshBasicMaterial({ color: accentColor });
-      darkMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.3, metalness: 0.9 });
+      radiatorMat = new THREE.MeshStandardMaterial({
+        color: 0xf97316,
+        emissive: 0xe11d48,
+        emissiveIntensity: isTestBurning ? 1.5 : 0.8,
+        roughness: 0.4
+      });
+      trussMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.9, roughness: 0.2 });
     } else if (renderMode === 'wireframe') {
       hullMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true });
-      canopyMat = new THREE.MeshBasicMaterial({ color: 0x818cf8, wireframe: true });
-      glowMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true });
       darkMat = new THREE.MeshBasicMaterial({ color: 0x0284c7, wireframe: true });
+      glowMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true });
+      canopyMat = new THREE.MeshBasicMaterial({ color: 0x818cf8, wireframe: true });
+      radiatorMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b, wireframe: true });
+      trussMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true });
     } else if (renderMode === 'xray') {
-      hullMat = new THREE.MeshPhysicalMaterial({
-        color: 0x0284c7,
-        transparent: true,
-        opacity: 0.28,
-        roughness: 0.1,
-        metalness: 0.5,
-        wireframe: false
-      });
-      canopyMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.4 });
+      hullMat = new THREE.MeshPhysicalMaterial({ color: 0x0284c7, transparent: true, opacity: 0.25, roughness: 0.1 });
+      darkMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.4 });
       glowMat = new THREE.MeshBasicMaterial({ color: 0xa855f7 });
-      darkMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.5 });
+      canopyMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.4 });
+      radiatorMat = new THREE.MeshBasicMaterial({ color: 0xf43f5e, transparent: true, opacity: 0.7 });
+      trussMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.5 });
     } else if (renderMode === 'thermal') {
-      // Thermal false-color infrared gradient
       hullMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.5 });
+      darkMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.3 });
+      glowMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
       canopyMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
-      glowMat = new THREE.MeshBasicMaterial({ color: 0xffffff }); // White-hot engine
-      darkMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.3 }); // Orange heat
+      radiatorMat = new THREE.MeshBasicMaterial({ color: 0xff0055 });
+      trussMat = new THREE.MeshStandardMaterial({ color: 0x0284c7 });
     }
 
-    // --- PROCEDURAL REFINED HULL WITH SMOOTH BEZIER PROFILE ---
-    const curvePoints = splinePoints.map(p => {
-      const x = (p.y - 150) * -0.025 + 0.1;
-      const y = (p.x - 240) * 0.022;
-      return new THREE.Vector2(Math.max(0.15, Math.abs(x)), y);
-    });
+    // =========================================================================
+    // 1. PRIMARY HULL GEOMETRIES BY ARCHITECTURE
+    // =========================================================================
 
-    curvePoints.sort((a, b) => a.y - b.y);
-    const hullGeo = new THREE.LatheGeometry(curvePoints, 36);
-    hullGeo.rotateX(Math.PI / 2);
-    hullGeo.scale(1.45, 0.75, 1.45);
-    const hullMesh = new THREE.Mesh(hullGeo, hullMat);
-    group.add(hullMesh);
+    if (arch === 'angular_stealth') {
+      // --- ANGULAR STEALTH FRIGATE (Faceted Radar-Deflecting Plates) ---
+      const prowGeo = new THREE.ConeGeometry(2.4, 7.5, 4); // 4-sided diamond pyramid
+      prowGeo.rotateX(Math.PI / 2);
+      prowGeo.rotateZ(Math.PI / 4);
+      prowGeo.scale(1.4, 0.55, 1.2);
+      const prow = new THREE.Mesh(prowGeo, hullMat);
+      prow.position.set(0, 0, 1.8);
+      group.add(prow);
 
-    // 2. Cockpit Canopy Bulge
-    const canopyGeo = new THREE.SphereGeometry(1.2, 24, 16);
-    canopyGeo.scale(0.8, 0.45, 2.0);
-    const canopyMesh = new THREE.Mesh(canopyGeo, canopyMat);
-    canopyMesh.position.set(0, 0.7, 1.2);
-    group.add(canopyMesh);
+      // Mid Fuselage Faceted Hex Prism
+      const midGeo = new THREE.CylinderGeometry(2.2, 2.6, 5.5, 6);
+      midGeo.rotateX(Math.PI / 2);
+      midGeo.scale(1.3, 0.6, 1.0);
+      const mid = new THREE.Mesh(midGeo, hullMat);
+      mid.position.set(0, 0, -2.4);
+      group.add(mid);
 
-    // 3. Swept Aerodynamic Delta Wings
-    const wingShape = new THREE.Shape();
-    wingShape.moveTo(0, 0);
-    wingShape.lineTo(6.6, -2.8);
-    wingShape.lineTo(6.9, -4.3);
-    wingShape.lineTo(2.1, -3.9);
-    wingShape.lineTo(0, -3.3);
-    wingShape.closePath();
+      // Angled Armor Chines
+      const chineGeo = new THREE.BoxGeometry(7.2, 0.18, 4.2);
+      chineGeo.rotateY(Math.PI / 8);
+      const chineR = new THREE.Mesh(chineGeo, hullMat);
+      chineR.position.set(2.8, -0.1, -1.2);
+      group.add(chineR);
 
-    const extrudeSettings = { depth: 0.2, bevelEnabled: true, bevelSegments: 3, steps: 1, bevelSize: 0.08, bevelThickness: 0.08 };
-    const wingGeo = new THREE.ExtrudeGeometry(wingShape, extrudeSettings);
-    wingGeo.rotateX(Math.PI / 2);
+      const chineL = new THREE.Mesh(chineGeo, hullMat);
+      chineL.position.set(-2.8, -0.1, -1.2);
+      chineL.scale.set(-1, 1, 1);
+      group.add(chineL);
 
-    const rightWing = new THREE.Mesh(wingGeo, hullMat);
-    rightWing.position.set(0.8, 0, 0.5);
-    group.add(rightWing);
+    } else if (arch === 'industrial_expanse') {
+      // --- INDUSTRIAL HEAVY MODULAR (Zero-G Segmented Hull & Trusses) ---
+      // Heavy Rectangular Modular Spine
+      const spineGeo = new THREE.BoxGeometry(2.6, 2.2, 9.5);
+      const spine = new THREE.Mesh(spineGeo, hullMat);
+      spine.position.set(0, 0, -0.8);
+      group.add(spine);
 
-    const leftWing = new THREE.Mesh(wingGeo, hullMat);
-    leftWing.scale.set(-1, 1, 1);
-    leftWing.position.set(-0.8, 0, 0.5);
-    group.add(leftWing);
+      // Segmented Cargo Container Pods
+      for (let z of [1.5, -0.5, -2.5]) {
+        for (let side of [-1.8, 1.8]) {
+          const podGeo = new THREE.BoxGeometry(1.2, 1.1, 1.6);
+          const pod = new THREE.Mesh(podGeo, darkMat);
+          pod.position.set(side, 0, z);
+          group.add(pod);
+        }
+      }
 
-    // Wingtip Accent Glow Strips
-    const wingTipGeo = new THREE.BoxGeometry(0.12, 0.12, 1.6);
-    const rightWingGlow = new THREE.Mesh(wingTipGeo, glowMat);
-    rightWingGlow.position.set(7.2, 0.1, -3.0);
-    group.add(rightWingGlow);
+      // Reinforced Forward Sensor Prow
+      const prowGeo = new THREE.BoxGeometry(2.2, 1.8, 2.8);
+      const prow = new THREE.Mesh(prowGeo, darkMat);
+      prow.position.set(0, 0, 4.8);
+      group.add(prow);
 
-    const leftWingGlow = new THREE.Mesh(wingTipGeo, glowMat);
-    leftWingGlow.position.set(-7.2, 0.1, -3.0);
-    group.add(leftWingGlow);
+      // Outboard Nacelle Trusses
+      for (let side of [-4.2, 4.2]) {
+        const outriggerGeo = new THREE.CylinderGeometry(0.85, 1.1, 4.8, 12);
+        outriggerGeo.rotateX(Math.PI / 2);
+        const nacelle = new THREE.Mesh(outriggerGeo, hullMat);
+        nacelle.position.set(side, 0, -3.2);
+        group.add(nacelle);
 
-    // 4. Sublight Engine Nacelles & Thruster Cones
+        // Girder Struts connecting to main hull
+        const strutGeo = new THREE.BoxGeometry(3.0, 0.35, 0.8);
+        const strut = new THREE.Mesh(strutGeo, trussMat);
+        strut.position.set(side > 0 ? 2.6 : -2.6, 0, -2.8);
+        group.add(strut);
+      }
+
+    } else if (arch === 'brutalist_dreadnought') {
+      // --- BRUTALIST BATTLECRUISER (Hammerhead Prow & Superstructure) ---
+      // Heavy Hammerhead Prow
+      const hammerGeo = new THREE.BoxGeometry(7.8, 2.4, 2.8);
+      const hammer = new THREE.Mesh(hammerGeo, hullMat);
+      hammer.position.set(0, 0, 4.2);
+      group.add(hammer);
+
+      // Long Armored Citadel Trench
+      const citadelGeo = new THREE.BoxGeometry(4.2, 2.8, 8.5);
+      const citadel = new THREE.Mesh(citadelGeo, hullMat);
+      citadel.position.set(0, 0.2, -1.0);
+      group.add(citadel);
+
+      // Elevated Command Bridge Superstructure
+      const bridgeGeo = new THREE.BoxGeometry(2.2, 1.6, 2.5);
+      const bridge = new THREE.Mesh(bridgeGeo, darkMat);
+      bridge.position.set(0, 2.0, -1.5);
+      group.add(bridge);
+
+      const bridgeGlass = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.3, 0.8), canopyMat);
+      bridgeGlass.position.set(0, 2.2, -0.4);
+      group.add(bridgeGlass);
+
+      // Flanking Heavy Armor Skirts
+      for (let side of [-3.2, 3.2]) {
+        const skirtGeo = new THREE.BoxGeometry(0.8, 2.2, 7.2);
+        const skirt = new THREE.Mesh(skirtGeo, darkMat);
+        skirt.position.set(side, 0, -1.2);
+        group.add(skirt);
+      }
+
+    } else if (arch === 'outrigger_science') {
+      // --- OUTRIGGER LONG-RANGE SCIENCE (Twin Booms & Dish Array) ---
+      const coreGeo = new THREE.CylinderGeometry(1.4, 1.4, 8.2, 16);
+      coreGeo.rotateX(Math.PI / 2);
+      const core = new THREE.Mesh(coreGeo, hullMat);
+      core.position.set(0, 0, 0);
+      group.add(core);
+
+      // Twin Long Outrigger Nacelle Booms
+      for (let side of [-4.5, 4.5]) {
+        const boomGeo = new THREE.CylinderGeometry(0.35, 0.35, 9.5, 8);
+        boomGeo.rotateX(Math.PI / 2);
+        const boom = new THREE.Mesh(boomGeo, trussMat);
+        boom.position.set(side, 0, -1.5);
+        group.add(boom);
+
+        // Cross Struts
+        const crossGeo = new THREE.BoxGeometry(3.6, 0.25, 0.6);
+        const cross1 = new THREE.Mesh(crossGeo, trussMat);
+        cross1.position.set(side > 0 ? 2.5 : -2.5, 0, 1.8);
+        group.add(cross1);
+
+        const cross2 = new THREE.Mesh(crossGeo, trussMat);
+        cross2.position.set(side > 0 ? 2.5 : -2.5, 0, -3.2);
+        group.add(cross2);
+      }
+
+    } else {
+      // --- AERODYNAMIC SLEEK (Smooth Lathed Bezier Profile) ---
+      const curvePoints = splinePoints.map(p => {
+        const x = (p.y - 150) * -0.025 + 0.1;
+        const y = (p.x - 240) * 0.022;
+        return new THREE.Vector2(Math.max(0.15, Math.abs(x)), y);
+      }).sort((a, b) => a.y - b.y);
+
+      const hullGeo = new THREE.LatheGeometry(curvePoints, 32);
+      hullGeo.rotateX(Math.PI / 2);
+      hullGeo.scale(1.4, 0.75, 1.4);
+      group.add(new THREE.Mesh(hullGeo, hullMat));
+
+      const canopyGeo = new THREE.SphereGeometry(1.2, 24, 16);
+      canopyGeo.scale(0.8, 0.45, 2.0);
+      const canopy = new THREE.Mesh(canopyGeo, canopyMat);
+      canopy.position.set(0, 0.7, 1.2);
+      group.add(canopy);
+
+      const wingShape = new THREE.Shape();
+      wingShape.moveTo(0, 0); wingShape.lineTo(6.6, -2.8); wingShape.lineTo(6.9, -4.3); wingShape.lineTo(2.1, -3.9); wingShape.lineTo(0, -3.3); wingShape.closePath();
+      const wingGeo = new THREE.ExtrudeGeometry(wingShape, { depth: 0.2, bevelEnabled: true, bevelSegments: 3, steps: 1, bevelSize: 0.08 });
+      wingGeo.rotateX(Math.PI / 2);
+
+      const rWing = new THREE.Mesh(wingGeo, hullMat); rWing.position.set(0.8, 0, 0.5); group.add(rWing);
+      const lWing = new THREE.Mesh(wingGeo, hullMat); lWing.scale.set(-1, 1, 1); lWing.position.set(-0.8, 0, 0.5); group.add(lWing);
+    }
+
+    // =========================================================================
+    // 2. SPACE PROTRUSIONS: RADIATORS, SENSORS, TRUSSES, RCS BLOCKS
+    // =========================================================================
+
+    // A. Glowing Heat Radiator Panels (Crucial Space Physics)
+    if (protrusions.radiatorPanels) {
+      const radiatorGeo = new THREE.BoxGeometry(0.06, 2.4, 3.6);
+      for (let side of [-2.4, 2.4]) {
+        const rad = new THREE.Mesh(radiatorGeo, radiatorMat);
+        rad.position.set(side, 1.2, -1.8);
+        rad.rotation.z = side > 0 ? 0.35 : -0.35;
+        radiatorGlowRef.current = rad;
+        group.add(rad);
+      }
+    }
+
+    // B. Communications Antennae & Sensor Spars
+    if (protrusions.sensorMasts) {
+      // Long Forward Telemetry Spar
+      const mastGeo = new THREE.CylinderGeometry(0.04, 0.08, 4.2, 8);
+      mastGeo.rotateX(Math.PI / 2);
+      const mast = new THREE.Mesh(mastGeo, darkMat);
+      mast.position.set(0, 1.1, 3.8);
+      group.add(mast);
+
+      // High-Gain Directional Dish
+      const dishGeo = new THREE.SphereGeometry(0.65, 16, 12, 0, Math.PI * 2, 0, Math.PI / 3);
+      dishGeo.rotateX(Math.PI);
+      const dish = new THREE.Mesh(dishGeo, trussMat);
+      dish.position.set(0, 1.8, -0.4);
+      group.add(dish);
+    }
+
+    // C. RCS (Reaction Control System) Quad Vernier Thrusters
+    if (protrusions.rcsBlocks) {
+      const rcsPositions = [
+        [2.2, 0.6, 3.2], [-2.2, 0.6, 3.2],
+        [2.2, -0.6, 3.2], [-2.2, -0.6, 3.2],
+        [3.4, 0.6, -4.2], [-3.4, 0.6, -4.2],
+        [3.4, -0.6, -4.2], [-3.4, -0.6, -4.2]
+      ];
+      const rcsGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+      rcsPositions.forEach(pos => {
+        const rcs = new THREE.Mesh(rcsGeo, darkMat);
+        rcs.position.set(...pos);
+        group.add(rcs);
+      });
+    }
+
+    // D. Sponson Turrets / Weapon Blisters
+    if (protrusions.turretSponsons) {
+      for (let side of [-2.8, 2.8]) {
+        const turretBase = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 0.3, 12), darkMat);
+        turretBase.position.set(side, 0.6, 0.8);
+        group.add(turretBase);
+
+        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.6, 8), trussMat);
+        barrel.rotateX(Math.PI / 2);
+        barrel.position.set(side, 0.8, 1.4);
+        group.add(barrel);
+      }
+    }
+
+    // =========================================================================
+    // 3. ENGINES, FTL RINGS, WEAPONS & SENSORS
+    // =========================================================================
+
+    // Sublight Engine Thruster Clusters
     for (let xOffset of [-1.8, 1.8]) {
-      const nacelleGeo = new THREE.CylinderGeometry(0.75, 0.98, 3.8, 24);
-      nacelleGeo.rotateX(Math.PI / 2);
-      const nacelle = new THREE.Mesh(nacelleGeo, darkMat);
-      nacelle.position.set(xOffset, -0.1, -3.8);
+      const nacelle = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 1.0, 3.8, 24), darkMat);
+      nacelle.rotateX(Math.PI / 2);
+      nacelle.position.set(xOffset, -0.1, -4.2);
       group.add(nacelle);
 
-      const thrusterGeo = new THREE.CylinderGeometry(0.68, 0.42, 0.45, 24);
-      thrusterGeo.rotateX(Math.PI / 2);
-      const thruster = new THREE.Mesh(thrusterGeo, glowMat);
-      thruster.position.set(xOffset, -0.1, -5.6);
+      const thruster = new THREE.Mesh(new THREE.CylinderGeometry(0.68, 0.42, 0.45, 24), glowMat);
+      thruster.rotateX(Math.PI / 2);
+      thruster.position.set(xOffset, -0.1, -6.0);
       group.add(thruster);
     }
 
-    // 5. Internal X-Ray Reactor Cores (Visible in X-Ray Diagnostic Mode)
-    if (renderMode === 'xray') {
-      const reactorGeo = new THREE.CylinderGeometry(0.5, 0.5, 4, 16);
-      reactorGeo.rotateX(Math.PI / 2);
-      const reactor = new THREE.Mesh(reactorGeo, new THREE.MeshBasicMaterial({ color: 0x10b981 }));
-      reactor.position.set(0, 0, -0.8);
-      group.add(reactor);
-
-      const fuelPipeGeo = new THREE.TorusGeometry(1.2, 0.1, 8, 24);
-      const fuelPipe = new THREE.Mesh(fuelPipeGeo, new THREE.MeshBasicMaterial({ color: 0xa855f7 }));
-      fuelPipe.position.set(0, 0, -2.5);
-      group.add(fuelPipe);
-    }
-
-    // 6. FTL Engine Component (Alcubierre Ring / Graviton Singularity)
+    // FTL Engine Component
     if (currentShip.ftl === 'alcubierre_ring') {
-      const ringGeo = new THREE.TorusGeometry(3.6, 0.32, 16, 48);
-      const ringMat = new THREE.MeshPhysicalMaterial({
+      const ringGeo = new THREE.TorusGeometry(3.8, 0.32, 16, 48);
+      const ring = new THREE.Mesh(ringGeo, new THREE.MeshPhysicalMaterial({
         color: 0x818cf8,
         emissive: 0x818cf8,
         emissiveIntensity: 0.8,
@@ -744,92 +938,59 @@ export default function AstralisShipyard() {
         roughness: 0.1,
         transparent: true,
         opacity: 0.9
-      });
-      const ring = new THREE.Mesh(ringGeo, ringMat);
-      ring.position.set(0, 0.1, -1.2);
+      }));
+      ring.position.set(0, 0.1, -1.4);
       group.add(ring);
     } else if (currentShip.ftl === 'graviton_singularity') {
-      const coreGeo = new THREE.SphereGeometry(1.5, 24, 24);
-      const coreMat = new THREE.MeshStandardMaterial({
+      const core = new THREE.Mesh(new THREE.SphereGeometry(1.5, 24, 24), new THREE.MeshStandardMaterial({
         color: 0xa855f7,
         emissive: 0xa855f7,
         emissiveIntensity: 1.0,
         wireframe: true
-      });
-      const core = new THREE.Mesh(coreGeo, coreMat);
+      }));
       core.position.set(0, 0.6, -1.8);
       group.add(core);
     }
 
-    // 7. Weapon Hardpoints (Gauss / Plasma / Torpedoes)
-    for (let xOffset of [-3.2, 3.2]) {
-      const weaponMountGeo = new THREE.BoxGeometry(0.55, 0.45, 1.8);
-      const mount = new THREE.Mesh(weaponMountGeo, darkMat);
-      mount.position.set(xOffset, -0.2, -1.0);
-      group.add(mount);
-
-      if (currentShip.weapons === 'gauss_cannons' || currentShip.weapons === 'plasma_lance') {
-        const barrelGeo = new THREE.CylinderGeometry(0.1, 0.1, 2.4, 12);
-        barrelGeo.rotateX(Math.PI / 2);
-        const barrel = new THREE.Mesh(barrelGeo, new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.95, roughness: 0.2 }));
-        barrel.position.set(xOffset, -0.2, 0.9);
-        group.add(barrel);
-      } else {
-        const podGeo = new THREE.CylinderGeometry(0.32, 0.32, 1.6, 16);
-        podGeo.rotateX(Math.PI / 2);
-        const pod = new THREE.Mesh(podGeo, glowMat);
-        pod.position.set(xOffset, -0.15, 0.5);
-        group.add(pod);
-      }
-    }
-
-    // 8. Sensor / LADAR Spine or Dome
-    if (currentShip.sensors === 'ladar_array' || currentShip.sensors === 'tachyon_scanner') {
-      const spineGeo = new THREE.CylinderGeometry(0.09, 0.16, 3.4, 12);
-      spineGeo.rotateX(Math.PI / 2);
-      const spine = new THREE.Mesh(spineGeo, glowMat);
-      spine.position.set(0, 1.25, 0);
-      group.add(spine);
-    } else {
-      const domeGeo = new THREE.SphereGeometry(0.65, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2);
-      const dome = new THREE.Mesh(domeGeo, darkMat);
-      dome.position.set(0, 0.85, -0.5);
-      group.add(dome);
-    }
-
-    // 9. Dynamic Engine Particle System
+    // Engine Exhaust Particle Stream
     const pCount = 140;
     const pGeo = new THREE.BufferGeometry();
     const pPos = new Float32Array(pCount * 3);
     for (let i = 0; i < pCount * 3; i += 3) {
-      pPos[i] = (Math.random() - 0.5) * 1.4;
-      pPos[i + 1] = (Math.random() - 0.5) * 0.8;
-      pPos[i + 2] = -4.5 - Math.random() * 14;
+      pPos[i] = (Math.random() - 0.5) * 1.5;
+      pPos[i + 1] = (Math.random() - 0.5) * 0.9;
+      pPos[i + 2] = -5.0 - Math.random() * 14;
     }
     pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
-    const pMat = new THREE.PointsMaterial({
+    const particles = new THREE.Points(pGeo, new THREE.PointsMaterial({
       color: renderMode === 'thermal' ? 0xffffff : accentColor,
-      size: 0.5,
+      size: 0.55,
       transparent: true,
       opacity: 0.9,
       blending: THREE.AdditiveBlending
-    });
-    const particles = new THREE.Points(pGeo, pMat);
+    }));
     particlesRef.current = particles;
     group.add(particles);
   };
 
   useEffect(() => {
     rebuildShipMesh();
-  }, [currentShip, renderMode, splinePoints]);
+  }, [currentShip, renderMode, splinePoints, protrusions]);
+
+  // Handle Architecture Swap
+  const handleSelectArchitecture = (archId) => {
+    if (soundEnabled) sfx.playWarp();
+    setCurrentShip(prev => ({
+      ...prev,
+      architecture: archId,
+      name: prev.name.split(' ')[0] + ' ' + HULL_ARCHITECTURES.find(a => a.id === archId)?.name.split(' ')[0]
+    }));
+  };
 
   // Handle Component Swap
   const handleSwapComponent = (category, item) => {
     if (soundEnabled) sfx.playClick();
-    setCurrentShip(prev => ({
-      ...prev,
-      [category]: item.id
-    }));
+    setCurrentShip(prev => ({ ...prev, [category]: item.id }));
   };
 
   // Handle Preset Selection
@@ -843,15 +1004,6 @@ export default function AstralisShipyard() {
     if (soundEnabled) sfx.playBurn();
     setIsTestBurning(true);
     setTimeout(() => setIsTestBurning(false), 2200);
-  };
-
-  // Handle Tech Research Unlock
-  const handleUnlockTech = (techId, cost) => {
-    if (researchPoints >= cost) {
-      if (soundEnabled) sfx.playWarp();
-      setResearchPoints(prev => prev - cost);
-      setUnlockedTechs(prev => ({ ...prev, [techId]: true }));
-    }
   };
 
   // Handle AI Ship Generation Prompt
@@ -869,57 +1021,57 @@ export default function AstralisShipyard() {
       let newPreset = { ...currentShip };
       let responseText = '';
 
-      if (lower.includes('stealth') || lower.includes('recon') || lower.includes('black ops')) {
+      if (lower.includes('stealth') || lower.includes('knife') || lower.includes('radar')) {
         newPreset = {
           ...currentShip,
-          name: 'VOD-X Shadow Wraith',
-          class: 'Stealth Interceptor',
+          architecture: 'angular_stealth',
+          name: 'VOD-X Shadow Knife',
+          class: 'Stealth Recon Frigate',
           material: 'carbon_nanotube',
           accentColor: '#38BDF8',
           sublight: 'mpd_thruster',
-          ftl: 'alcubierre_ring',
-          sensors: 'ladar_array'
+          ftl: 'alcubierre_ring'
         };
-        responseText = 'Configured Shadow Wraith stealth profile with low-observability carbon weave, ladar spine, and Alcubierre warp ring.';
-      } else if (lower.includes('heavy') || lower.includes('battleship') || lower.includes('dreadnought') || lower.includes('war')) {
+        responseText = 'Constructed Angular Stealth Frigate with faceted radar-deflecting armor, recessed weapon mounts, and Alcubierre warp ring.';
+      } else if (lower.includes('expanse') || lower.includes('industrial') || lower.includes('hauler') || lower.includes('zero-g')) {
         newPreset = {
           ...currentShip,
-          name: 'DREAD-9 Iron Sovereign',
-          class: 'Heavy Dreadnought',
+          architecture: 'industrial_expanse',
+          name: 'EX-9 Rocinante Rig',
+          class: 'Industrial Zero-G Hauler',
+          material: 'duranium',
+          accentColor: '#F59E0B',
+          sublight: 'fusion_torch',
+          ftl: 'hyper_shunt'
+        };
+        responseText = 'Forged Industrial Zero-G space architecture with heat radiator wings, outrigger truss engine pods, and exposed module cargo bays.';
+      } else if (lower.includes('dreadnought') || lower.includes('battleship') || lower.includes('heavy') || lower.includes('war')) {
+        newPreset = {
+          ...currentShip,
+          architecture: 'brutalist_dreadnought',
+          name: 'BC-99 Iron Sovereign',
+          class: 'Brutalist Battlecruiser',
           material: 'titanium_aerogel',
           accentColor: '#F43F5E',
           sublight: 'fusion_torch',
           ftl: 'graviton_singularity',
           weapons: 'quantum_torpedoes'
         };
-        responseText = 'Assembled Heavy Dreadnought matrix: Reinforced titanium aerogel armor, thermonuclear fusion torch, and micro-singularity ordnance.';
-      } else if (lower.includes('explorer') || lower.includes('deep space') || lower.includes('science')) {
-        newPreset = {
-          ...currentShip,
-          name: 'VOID-7 Chronos Voyager',
-          class: 'Deep Space Explorer',
-          material: 'chronium_cloak',
-          accentColor: '#10B981',
-          sublight: 'ion_pulse',
-          ftl: 'graviton_singularity',
-          sensors: 'tachyon_scanner',
-          fuel: 'zero_point_core'
-        };
-        responseText = 'Synthesized long-range scientific exploration configuration with tachyon scanners, zero-point micro core, and high-efficiency ion drives.';
+        responseText = 'Assembled Brutalist Battlecruiser with hammerhead armored prow, elevated citadel bridge, and spinal railgun battery.';
       } else {
         newPreset = {
           ...currentShip,
           name: 'CUSTOM-' + Math.floor(Math.random() * 900 + 100) + ' Starfarer',
           accentColor: ['#38BDF8', '#818CF8', '#10B981', '#F59E0B', '#F43F5E'][Math.floor(Math.random() * 5)]
         };
-        responseText = `Analyzed "${userMessage}". Optimized hull aerodynamics, recalculated power distribution, and balanced combat telemetry.`;
+        responseText = `Processed "${userMessage}". Configured non-aerodynamic space hull geometry with optimized thermal radiator dissipation and structural truss balance.`;
       }
 
       setCurrentShip(newPreset);
       setAiChatLog(prev => [...prev, { sender: 'ai', text: responseText }]);
       setIsAiGenerating(false);
       if (soundEnabled) sfx.playWarp();
-    }, 1200);
+    }, 1100);
   };
 
   // Export Standalone Single-File HTML Starship Viewer
@@ -942,7 +1094,7 @@ export default function AstralisShipyard() {
 <body>
   <div id="hud">
     <h1>${currentShip.name}</h1>
-    <p><strong>Class:</strong> ${currentShip.class}</p>
+    <p><strong>Architecture:</strong> ${currentShip.architecture || 'Angular Spacecraft'}</p>
     <p><strong>Drive:</strong> ${currentShip.sublight} | <strong>FTL:</strong> ${currentShip.ftl}</p>
     <p><strong>Ordnance:</strong> ${currentShip.weapons}</p>
   </div>
@@ -963,17 +1115,14 @@ export default function AstralisShipyard() {
     scene.add(dirLight);
 
     const ship = new THREE.Group();
-    const hullMat = new THREE.MeshStandardMaterial({ color: '${currentShip.accentColor}', roughness: 0.2, metalness: 0.9 });
-    const hullGeo = new THREE.ConeGeometry(2.5, 9, 32);
-    hullGeo.rotateX(Math.PI / 2);
-    hullGeo.scale(1.2, 0.6, 1.2);
-    const mesh = new THREE.Mesh(hullGeo, hullMat);
-    ship.add(mesh);
+    const hullMat = new THREE.MeshStandardMaterial({ color: '${currentShip.accentColor}', roughness: 0.25, metalness: 0.9 });
+    const prow = new THREE.Mesh(new THREE.ConeGeometry(2.4, 7.5, 4), hullMat);
+    prow.rotateX(Math.PI / 2); prow.rotateZ(Math.PI / 4);
+    ship.add(prow);
 
-    const wingGeo = new THREE.BoxGeometry(11, 0.15, 3.5);
-    const wings = new THREE.Mesh(wingGeo, hullMat);
-    wings.position.set(0, 0, -1);
-    ship.add(wings);
+    const radiator = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.2, 3.5), new THREE.MeshBasicMaterial({ color: 0xf97316 }));
+    radiator.position.set(2.2, 1.0, -1.5);
+    ship.add(radiator);
     scene.add(ship);
 
     let isDown = false, prevX = 0, prevY = 0;
@@ -1017,9 +1166,9 @@ export default function AstralisShipyard() {
           <div>
             <div className="flex items-center space-x-2">
               <span className="font-orbitron font-bold text-lg tracking-wider text-white">ASTRALIS</span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-mono border border-cyan-500/30">SHIPYARD CAD</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-mono border border-cyan-500/30">ZERO-G CAD</span>
             </div>
-            <p className="text-[11px] text-slate-400 font-mono">NEXT-GEN STARSHIP FOUNDRY &bull; V3.5 PROT</p>
+            <p className="text-[11px] text-slate-400 font-mono">NEXT-GEN NON-AERODYNAMIC SPACE FOUNDRY</p>
           </div>
         </div>
 
@@ -1033,6 +1182,15 @@ export default function AstralisShipyard() {
           >
             <Boxes className="w-4 h-4" />
             <span>3D FOUNDRY</span>
+          </button>
+          <button 
+            onClick={() => { if(soundEnabled) sfx.playClick(); setActiveTab('architecture'); }}
+            className={`px-4 py-2 rounded-lg text-xs font-medium font-mono flex items-center space-x-2 transition-all ${
+              activeTab === 'architecture' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Grid className="w-4 h-4" />
+            <span>HULL PARADIGMS</span>
           </button>
           <button 
             onClick={() => { if(soundEnabled) sfx.playClick(); setActiveTab('spline'); }}
@@ -1103,9 +1261,13 @@ export default function AstralisShipyard() {
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono">{currentShip.class}</span>
               </div>
               <h2 className="text-base font-orbitron font-bold text-white mt-1">{currentShip.name}</h2>
+              <div className="text-[11px] font-mono text-amber-400 mt-1 flex items-center space-x-1">
+                <span>Architecture:</span>
+                <span className="text-slate-200 font-semibold">{HULL_ARCHITECTURES.find(a => a.id === (currentShip.architecture || 'angular_stealth'))?.name}</span>
+              </div>
               <div className="grid grid-cols-2 gap-2 mt-3 pt-2 border-t border-slate-800 text-[11px] font-mono">
-                <div><span className="text-slate-400">Sublight:</span> <span className="text-slate-200">{COMPONENT_DATABASE.sublight.find(x => x.id === currentShip.sublight)?.name.split(' ')[0]}</span></div>
-                <div><span className="text-slate-400">FTL Core:</span> <span className="text-indigo-300">{COMPONENT_DATABASE.ftl.find(x => x.id === currentShip.ftl)?.name.split(' ')[0]}</span></div>
+                <div><span className="text-slate-400">Drive:</span> <span className="text-slate-200">{COMPONENT_DATABASE.sublight.find(x => x.id === currentShip.sublight)?.name.split(' ')[0]}</span></div>
+                <div><span className="text-slate-400">FTL:</span> <span className="text-indigo-300">{COMPONENT_DATABASE.ftl.find(x => x.id === currentShip.ftl)?.name.split(' ')[0]}</span></div>
                 <div><span className="text-slate-400">Ordnance:</span> <span className="text-rose-300">{COMPONENT_DATABASE.weapons.find(x => x.id === currentShip.weapons)?.name.split(' ')[0]}</span></div>
                 <div><span className="text-slate-400">Sensors:</span> <span className="text-emerald-300">{COMPONENT_DATABASE.sensors.find(x => x.id === currentShip.sensors)?.name.split(' ')[0]}</span></div>
               </div>
@@ -1135,10 +1297,10 @@ export default function AstralisShipyard() {
             </div>
           </div>
 
-          {/* Viewport Top Right: 3D Rendering Capabilities & Diagnostic Modes */}
+          {/* Viewport Top Right: 3D Diagnostic Modes & Lighting Controls */}
           <div className="absolute top-4 right-4 z-10 flex flex-col space-y-2 items-end">
             
-            {/* Shading / Diagnostic Mode Switcher */}
+            {/* Shading Mode Switcher */}
             <div className="glass-panel p-2 rounded-xl flex items-center space-x-1 text-xs font-mono">
               <span className="text-[10px] text-slate-400 px-2 flex items-center space-x-1">
                 <Layers className="w-3.5 h-3.5 text-cyan-400" />
@@ -1179,7 +1341,7 @@ export default function AstralisShipyard() {
               <input
                 type="range"
                 min="0.5"
-                max="4.0"
+                max="4.5"
                 step="0.1"
                 value={lightIntensity}
                 onChange={(e) => setLightIntensity(parseFloat(e.target.value))}
@@ -1201,12 +1363,33 @@ export default function AstralisShipyard() {
               <button onClick={() => setCameraPreset('rear')} className="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-slate-300">Aft</button>
             </div>
 
+            {/* Space Protrusions Hardware Toggles */}
+            <div className="glass-panel p-2 rounded-xl flex items-center space-x-2 text-xs font-mono">
+              <span className="text-[10px] text-slate-400 flex items-center space-x-1"><Cpu className="w-3 h-3 text-cyan-400" /> <span>HARDWARE:</span></span>
+              <button
+                onClick={() => setProtrusions(p => ({ ...p, radiatorPanels: !p.radiatorPanels }))}
+                className={`px-2 py-0.5 rounded text-[10px] border ${protrusions.radiatorPanels ? 'bg-orange-500/20 text-orange-300 border-orange-500/40' : 'bg-slate-900 text-slate-500 border-slate-800'}`}
+              >
+                Radiators
+              </button>
+              <button
+                onClick={() => setProtrusions(p => ({ ...p, sensorMasts: !p.sensorMasts }))}
+                className={`px-2 py-0.5 rounded text-[10px] border ${protrusions.sensorMasts ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' : 'bg-slate-900 text-slate-500 border-slate-800'}`}
+              >
+                Sensor Spars
+              </button>
+              <button
+                onClick={() => setProtrusions(p => ({ ...p, rcsBlocks: !p.rcsBlocks }))}
+                className={`px-2 py-0.5 rounded text-[10px] border ${protrusions.rcsBlocks ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-slate-900 text-slate-500 border-slate-800'}`}
+              >
+                RCS Blocks
+              </button>
+            </div>
+
           </div>
 
-          {/* Viewport Bottom Left: PROMINENT ROTATION CONTROL & ENGINE BURN */}
+          {/* Viewport Bottom Left: ROTATION CONTROL & ENGINE BURN */}
           <div className="absolute bottom-4 left-4 z-10 flex items-center space-x-2">
-            
-            {/* Primary Orbit Rotation Toggle (Stop / Resume) */}
             <button
               onClick={() => {
                 if (soundEnabled) sfx.playClick();
@@ -1222,7 +1405,6 @@ export default function AstralisShipyard() {
               <span>{autoRotate ? `ORBITING (${rotationSpeed}x)` : 'ORBIT PAUSED (FREEZE)'}</span>
             </button>
 
-            {/* Rotation Speed Controls when active */}
             {autoRotate && (
               <div className="glass-panel px-3 py-1.5 rounded-xl flex items-center space-x-2 text-xs font-mono">
                 <span className="text-[10px] text-slate-400">SPEED:</span>
@@ -1238,7 +1420,6 @@ export default function AstralisShipyard() {
               </div>
             )}
 
-            {/* Thruster Burn Test */}
             <button
               onClick={handleTestBurn}
               className={`px-3.5 py-2 rounded-xl text-xs font-mono font-bold flex items-center space-x-2 transition-all ${
@@ -1281,6 +1462,40 @@ export default function AstralisShipyard() {
         {/* --- RIGHT SIDEBAR PANEL --- */}
         <div className="w-96 border-l border-slate-800/80 glass-panel flex flex-col h-full z-20 shrink-0 overflow-y-auto">
           
+          {/* TAB 0: HULL ARCHITECTURAL PARADIGMS (ANGULAR, EXPANSE, BRUTALIST, ETC.) */}
+          {activeTab === 'architecture' && (
+            <div className="p-5 flex flex-col space-y-5">
+              <div>
+                <span className="text-[10px] font-mono text-amber-400 uppercase tracking-wider">Zero-G Structural Archetypes</span>
+                <h3 className="text-lg font-orbitron font-bold text-white">Space Architecture</h3>
+                <p className="text-xs text-slate-400 mt-1">In vacuum there is no air resistance. Select from angular stealth, industrial zero-g, or brutalist heavy hull forms.</p>
+              </div>
+
+              <div className="space-y-3">
+                {HULL_ARCHITECTURES.map(arch => (
+                  <button
+                    key={arch.id}
+                    onClick={() => handleSelectArchitecture(arch.id)}
+                    className={`w-full p-3.5 rounded-xl text-left border text-xs font-mono transition-all flex flex-col space-y-1.5 ${
+                      (currentShip.architecture || 'angular_stealth') === arch.id
+                        ? 'bg-amber-500/20 border-amber-500/60 text-amber-100 shadow-md ring-1 ring-amber-400/30'
+                        : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-orbitron font-bold text-white text-sm">{arch.name}</span>
+                      {(currentShip.architecture || 'angular_stealth') === arch.id && (
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-bold">ACTIVE</span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-amber-400 font-semibold">{arch.tag}</div>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">{arch.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* TAB 1: 3D COMPONENT HARDPOINT SLOTS */}
           {activeTab === 'designer' && (
             <div className="p-5 flex flex-col space-y-6">
@@ -1429,13 +1644,12 @@ export default function AstralisShipyard() {
               <div>
                 <span className="text-[10px] font-mono text-indigo-400 uppercase tracking-wider">Hull Geometry CAD</span>
                 <h3 className="text-lg font-orbitron font-bold text-white">Spline Sculptor</h3>
-                <p className="text-xs text-slate-400 mt-1">Drag the Bezier control points to shape smooth, aerodynamic curves in real time.</p>
+                <p className="text-xs text-slate-400 mt-1">Drag the Bezier control points to shape cross section contours in real time.</p>
               </div>
 
-              {/* 2D Interactive Bezier Canvas */}
               <div className="relative bg-slate-950 border border-slate-800 rounded-xl p-4 overflow-hidden">
                 <div className="text-[10px] font-mono text-slate-500 mb-2 flex justify-between">
-                  <span>LATHE PROFILE CANVAS</span>
+                  <span>CROSS-SECTION CANVAS</span>
                   <span>(Live 3D Lofting)</span>
                 </div>
                 <svg className="w-full h-52 bg-slate-900/70 rounded-lg border border-slate-800 cursor-crosshair">
@@ -1481,8 +1695,8 @@ export default function AstralisShipyard() {
                       </div>
                       <input
                         type="range"
-                        min="50"
-                        max="250"
+                        min="40"
+                        max="260"
                         value={p.y}
                         onChange={(e) => {
                           const val = parseInt(e.target.value);
@@ -1497,18 +1711,18 @@ export default function AstralisShipyard() {
                 <button
                   onClick={() => {
                     setSplinePoints([
-                      { id: 0, x: 20, y: 150, label: 'Nose Tip' },
-                      { id: 1, x: 90, y: 110, label: 'Cockpit Contour' },
-                      { id: 2, x: 200, y: 80, label: 'Mid Waist' },
-                      { id: 3, x: 310, y: 50, label: 'Wing Root Sweep' },
-                      { id: 4, x: 420, y: 110, label: 'Engine Nacelle' },
-                      { id: 5, x: 460, y: 150, label: 'Aft Exhaust' }
+                      { id: 0, x: 20, y: 150, label: 'Prow Tip' },
+                      { id: 1, x: 90, y: 100, label: 'Forward Chamfer' },
+                      { id: 2, x: 200, y: 70, label: 'Mid Hull Waist' },
+                      { id: 3, x: 310, y: 40, label: 'Armor Sponson Root' },
+                      { id: 4, x: 420, y: 100, label: 'Aft Nacelle Mount' },
+                      { id: 5, x: 460, y: 150, label: 'Engine Exhaust' }
                     ]);
                   }}
                   className="w-full mt-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono flex items-center justify-center space-x-2"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
-                  <span>RESET TO AERODYNAMIC DEFAULT</span>
+                  <span>RESET TO ANGULAR DEFAULT</span>
                 </button>
               </div>
             </div>
@@ -1536,7 +1750,13 @@ export default function AstralisShipyard() {
                   <p className="text-[11px] text-slate-400">Enables instant spacetime folding leaps without warp transit dilation.</p>
                   {!unlockedTechs.graviton_singularity && (
                     <button
-                      onClick={() => handleUnlockTech('graviton_singularity', 5000)}
+                      onClick={() => {
+                        if (researchPoints >= 5000) {
+                          if (soundEnabled) sfx.playWarp();
+                          setResearchPoints(p => p - 5000);
+                          setUnlockedTechs(p => ({ ...p, graviton_singularity: true }));
+                        }
+                      }}
                       disabled={researchPoints < 5000}
                       className="w-full py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 text-slate-950 text-xs font-bold font-mono"
                     >
@@ -1557,7 +1777,13 @@ export default function AstralisShipyard() {
                   <p className="text-[11px] text-slate-400">Superluminal particles that phase through target shields with 890 MJ pulse output.</p>
                   {!unlockedTechs.tachyon_disruptor && (
                     <button
-                      onClick={() => handleUnlockTech('tachyon_disruptor', 4200)}
+                      onClick={() => {
+                        if (researchPoints >= 4200) {
+                          if (soundEnabled) sfx.playWarp();
+                          setResearchPoints(p => p - 4200);
+                          setUnlockedTechs(p => ({ ...p, tachyon_disruptor: true }));
+                        }
+                      }}
                       disabled={researchPoints < 4200}
                       className="w-full py-1.5 rounded-lg bg-rose-500 hover:bg-rose-400 disabled:opacity-40 text-slate-950 text-xs font-bold font-mono"
                     >
@@ -1578,7 +1804,13 @@ export default function AstralisShipyard() {
                   <p className="text-[11px] text-slate-400">Miniaturizes ship fuel containment by 75% while providing near limitless range.</p>
                   {!unlockedTechs.zero_point_core && (
                     <button
-                      onClick={() => handleUnlockTech('zero_point_core', 6500)}
+                      onClick={() => {
+                        if (researchPoints >= 6500) {
+                          if (soundEnabled) sfx.playWarp();
+                          setResearchPoints(p => p - 6500);
+                          setUnlockedTechs(p => ({ ...p, zero_point_core: true }));
+                        }
+                      }}
                       disabled={researchPoints < 6500}
                       className="w-full py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-slate-950 text-xs font-bold font-mono"
                     >
@@ -1609,16 +1841,17 @@ export default function AstralisShipyard() {
                 {isAiGenerating && (
                   <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-300 flex items-center space-x-2">
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Synthesizing hull geometry &amp; loadout...</span>
+                    <span>Synthesizing zero-g hull geometry &amp; loadout...</span>
                   </div>
                 )}
               </div>
 
               <div className="flex flex-wrap gap-1.5">
                 {[
-                  'Stealth reconnaissance ship',
-                  'Heavy battleship with torpedoes',
-                  'Deep space science explorer'
+                  'Angular stealth knife frigate',
+                  'Expanse style industrial hauler',
+                  'Brutalist heavy battlecruiser',
+                  'Outrigger deep space science ship'
                 ].map((sugg, i) => (
                   <button
                     key={i}
@@ -1636,7 +1869,7 @@ export default function AstralisShipyard() {
                   value={aiPrompt}
                   onChange={(e) => setAiPrompt(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSendAiPrompt()}
-                  placeholder="Describe your starship idea..."
+                  placeholder="Describe your spacecraft concept..."
                   className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500 font-mono"
                 />
                 <button

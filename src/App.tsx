@@ -10,6 +10,8 @@ import {
   Rocket,
   Shield,
   Sliders,
+  Sparkles,
+  Spline,
   Volume2,
   VolumeX,
   Wrench,
@@ -25,6 +27,7 @@ import {
   WEAPONS,
 } from './domain/components';
 import { CONDITION_PRESETS, conditionFor, deriveWear, presetFor } from './domain/condition';
+import { DEFAULT_HULL_PROFILE, type ProfilePoint } from './domain/profile';
 import { SHIP_PRESETS } from './domain/presets';
 import { sfx } from './domain/sound';
 import { STAT_LABELS, deriveOverall, deriveStats } from './domain/stats';
@@ -49,6 +52,9 @@ import {
   type RenderMode,
 } from './render/viewportOptions';
 import { OptionRow, Panel, Segmented, Slider, StatBar, Toggle } from './ui/primitives';
+import { HullSculptor } from './ui/HullSculptor';
+import { ArchitectPanel, type ArchitectEntry } from './ui/ArchitectPanel';
+import { requestProposal } from './services/architect';
 
 /**
  * The render stack — three, R3F, drei, postprocessing — is well over a megabyte
@@ -77,12 +83,15 @@ const ARCH_ICONS: Record<string, typeof Shield> = {
   Rocket,
 };
 
-type Tab = 'designer' | 'research' | 'condition';
+type Tab = 'designer' | 'hull' | 'condition' | 'research' | 'architect';
 
-const TABS: ReadonlyArray<{ id: Tab; label: string; Icon: typeof Shield }> = [
-  { id: 'designer', label: 'Designer', Icon: Sliders },
-  { id: 'condition', label: 'Condition', Icon: Wrench },
-  { id: 'research', label: 'R&D', Icon: FlaskConical },
+// `label` is the accessible name; `short` is what fits in a 384px rail.
+const TABS: ReadonlyArray<{ id: Tab; label: string; short: string; Icon: typeof Shield }> = [
+  { id: 'designer', label: 'Designer', short: 'Design', Icon: Sliders },
+  { id: 'hull', label: 'Hull', short: 'Hull', Icon: Spline },
+  { id: 'condition', label: 'Condition', short: 'Wear', Icon: Wrench },
+  { id: 'research', label: 'R&D', short: 'R&D', Icon: FlaskConical },
+  { id: 'architect', label: 'Architect', short: 'AI', Icon: Sparkles },
 ];
 
 export default function App() {
@@ -103,6 +112,8 @@ export default function App() {
   const [research, setResearch] = useState<ResearchState>(INITIAL_RESEARCH);
   const [tab, setTab] = useState<Tab>('designer');
   const [notice, setNotice] = useState<string | null>(null);
+  const [architectHistory, setArchitectHistory] = useState<ArchitectEntry[]>([]);
+  const [architectBusy, setArchitectBusy] = useState(false);
 
   const shipGroup = useRef<Group | null>(null);
   const burnTimer = useRef<number | null>(null);
@@ -168,6 +179,34 @@ export default function App() {
       return result.state;
     });
   }, []);
+
+  const setHullProfile = useCallback((hullProfile: ProfilePoint[]) => {
+    setBlueprint((prev) => ({ ...prev, hullProfile }));
+  }, []);
+
+  const handleArchitect = useCallback(
+    async (prompt: string) => {
+      setArchitectBusy(true);
+      const id = Date.now();
+      setArchitectHistory((history) => [...history, { id, prompt, proposal: null }]);
+      try {
+        const proposal = await requestProposal(prompt, blueprint, research);
+        setBlueprint(proposal.blueprint);
+        setArchitectHistory((history) =>
+          history.map((entry) => (entry.id === id ? { ...entry, proposal } : entry)),
+        );
+        sfx.play('warp');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'The architect failed.';
+        setArchitectHistory((history) =>
+          history.map((entry) => (entry.id === id ? { ...entry, error: message } : entry)),
+        );
+      } finally {
+        setArchitectBusy(false);
+      }
+    },
+    [blueprint, research],
+  );
 
   const handleExport = useCallback(async () => {
     if (!shipGroup.current) {
@@ -305,20 +344,23 @@ export default function App() {
         {/* Sidebar */}
         <aside className="flex w-full shrink-0 flex-col border-t border-white/5 lg:w-96 lg:border-l lg:border-t-0">
           <nav className="no-select flex shrink-0 border-b border-white/5" aria-label="Panels">
-            {TABS.map(({ id, label, Icon }) => (
+            {TABS.map(({ id, label, short, Icon }) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => setTab(id)}
                 aria-current={tab === id}
-                className={`flex flex-1 items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-medium transition-colors ${
+                aria-label={label}
+                // Five tabs in a 384px rail: shrink and truncate rather than
+                // overflowing the sidebar, which shifted the whole layout.
+                className={`flex min-w-0 flex-1 items-center justify-center gap-1 px-1.5 py-2.5 text-[11px] font-medium transition-colors ${
                   tab === id
                     ? 'border-b-2 border-neon-cyan text-neon-cyan'
                     : 'border-b-2 border-transparent text-slate-500 hover:text-slate-300'
                 }`}
               >
-                <Icon className="h-3.5 w-3.5" aria-hidden />
-                {label}
+                <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span className="truncate">{short}</span>
               </button>
             ))}
           </nav>
@@ -347,6 +389,39 @@ export default function App() {
 
             {tab === 'research' && (
               <ResearchTab research={research} onUnlock={handleUnlock} />
+            )}
+
+            {tab === 'hull' && (
+              <Panel title="Hull Sculptor">
+                {blueprint.architecture !== 'aerodynamic_sleek' && (
+                  <div className="mb-3 rounded-lg border border-neon-amber/25 bg-neon-amber/10 px-3 py-2">
+                    <p className="text-[11px] leading-snug text-neon-amber">
+                      This cross-section is revolved by the Aerodynamic Hybrid Cruiser hull.
+                      The other archetypes are welded plate and truss, not lathed.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setArchitecture('aerodynamic_sleek')}
+                      className="mt-2 rounded-md bg-neon-amber/15 px-2.5 py-1 text-[11px] font-medium text-neon-amber ring-1 ring-neon-amber/30 transition-colors hover:bg-neon-amber/25"
+                    >
+                      Switch to that hull
+                    </button>
+                  </div>
+                )}
+                <HullSculptor
+                  profile={blueprint.hullProfile ?? DEFAULT_HULL_PROFILE}
+                  onChange={setHullProfile}
+                  disabled={blueprint.architecture !== 'aerodynamic_sleek'}
+                />
+              </Panel>
+            )}
+
+            {tab === 'architect' && (
+              <ArchitectPanel
+                history={architectHistory}
+                busy={architectBusy}
+                onSubmit={(prompt) => void handleArchitect(prompt)}
+              />
             )}
 
             {/* Viewport controls are always available */}

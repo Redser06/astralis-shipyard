@@ -1,6 +1,11 @@
 import { useMemo, type ReactElement } from 'react';
 import { Vector2 } from 'three';
 import type { ArchetypeId } from '../../domain/types';
+import {
+  DEFAULT_HULL_PROFILE,
+  sampleProfile,
+  type ProfilePoint,
+} from '../../domain/profile';
 
 /**
  * Hull geometry, one component per archetype.
@@ -12,6 +17,8 @@ import type { ArchetypeId } from '../../domain/types';
  */
 export interface HullProps {
   material: ReactElement;
+  /** Lathe cross-section — only the aerodynamic archetype revolves one. */
+  profile?: readonly ProfilePoint[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -250,30 +257,22 @@ function OutriggerScienceHull({ material }: HullProps) {
 
 /* ------------------------------------------------------------------ */
 
-function AerodynamicSleekHull({ material }: HullProps) {
-  // The one archetype built to meet atmosphere. A lathed profile rather than
-  // welded plates, with a swept delta planform.
-  const profile = useMemo(
+function AerodynamicSleekHull({ material, profile }: HullProps) {
+  // The one archetype built to meet atmosphere. Its cross-section is revolved
+  // from the Hull Sculptor's control points, sampled through the same
+  // Catmull-Rom the 2D editor draws — so what you draw is what you get.
+  const points = useMemo(
     () =>
-      (
-        [
-          [0.02, 8.0],
-          [0.55, 6.2],
-          [1.05, 3.6],
-          [1.35, 0.8],
-          [1.42, -2.0],
-          [1.25, -4.6],
-          [0.92, -6.4],
-          [0.72, -7.4],
-        ] as const
-      ).map(([r, z]) => new Vector2(r, z)),
-    [],
+      sampleProfile(profile ?? DEFAULT_HULL_PROFILE, 10).map(
+        (point) => new Vector2(point.r, point.z),
+      ),
+    [profile],
   );
 
   return (
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} castShadow receiveShadow>
-        <latheGeometry args={[profile, 40]} />
+        <latheGeometry args={[points, 40]} />
         {material}
       </mesh>
 
@@ -316,7 +315,7 @@ const HULLS: Record<ArchetypeId, (props: HullProps) => ReactElement> = {
   aerodynamic_sleek: AerodynamicSleekHull,
 };
 
-export function Hull({ archetype, material }: { archetype: ArchetypeId } & HullProps) {
+export function Hull({ archetype, material, profile }: { archetype: ArchetypeId } & HullProps) {
   const Component = HULLS[archetype];
-  return <Component material={material} />;
+  return <Component material={material} profile={profile} />;
 }

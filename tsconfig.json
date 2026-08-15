@@ -21,5 +21,5 @@
 
     "types": ["node", "vitest/globals", "@testing-library/jest-dom"]
   },
-  "include": ["src", "tests", "vite.config.ts", "playwright.config.ts", "eslint.config.js"]
+  "include": ["src", "tests", "server", "vite.config.ts", "playwright.config.ts", "eslint.config.js"]
 }

@@ -1,3 +1,5 @@
+import type { ProfilePoint } from './profile';
+
 /**
  * Domain types.
  *
@@ -141,6 +143,11 @@ export interface Blueprint {
   condition: number;
   /** Seeds every stochastic wear decision, so a ship renders identically forever. */
   seed: number;
+  /**
+   * Lathe cross-section for the aerodynamic archetype, edited by the Hull
+   * Sculptor. Optional so older saved blueprints still load.
+   */
+  hullProfile?: readonly ProfilePoint[];
 }
 
 export interface ShipStats {

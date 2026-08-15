@@ -211,6 +211,14 @@ test('condition drives a visible change from pristine to derelict', async ({ pag
 });
 
 test('the same seed renders deterministically across reloads', async ({ page }) => {
+  // The idle hover bob is time-based, so two sessions are never sampled at the
+  // same phase. Reduced motion pins the pose, letting this assert what it is
+  // meant to assert — that the *wear* is seeded — rather than that two
+  // animation clocks happened to line up.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.reload();
+  await waitForViewport(page);
+
   await page.getByRole('button', { name: 'Condition' }).click();
   await page.getByRole('button', { name: /Long Patrol/ }).click();
   await page.waitForTimeout(1200);
@@ -236,4 +244,63 @@ test('RC-4: archetypes render without their hardware detaching', async ({ page }
 
   const centre = await luminance(page, { x: 420, y: 260, w: 420, h: 280 });
   expect(centre.max).toBeGreaterThan(60);
+});
+
+/* --------------------------------------------------------------------------
+ * Features restored from the prototype rather than deleted.
+ * ------------------------------------------------------------------------ */
+
+test('Hull Sculptor reshapes the aerodynamic hull', async ({ page }) => {
+  await page.getByRole('button', { name: /Aerodynamic Hybrid Cruiser/ }).click();
+  await page.waitForTimeout(1200);
+  const before = await signature(page);
+
+  await page.getByRole('navigation', { name: 'Panels' }).getByRole('button', { name: 'Hull' }).click();
+
+  // Keyboard path: focus a station and fatten it. The prototype's handles could
+  // not be moved at all, by pointer or otherwise.
+  const station = page.getByRole('slider', { name: 'Station 4 radius' });
+  await station.focus();
+  const startRadius = Number(await station.getAttribute('aria-valuenow'));
+  for (let i = 0; i < 8; i++) await page.keyboard.press('ArrowUp');
+  await page.waitForTimeout(1200);
+
+  const endRadius = Number(await station.getAttribute('aria-valuenow'));
+  expect(endRadius, 'arrow keys must move the control point').toBeGreaterThan(startRadius);
+
+  const after = await signature(page);
+  expect(
+    difference(before, after),
+    'reshaping the profile must change the rendered hull',
+  ).toBeGreaterThan(0.01);
+});
+
+test('Hull Sculptor is disabled, with a reason, on hulls it cannot shape', async ({ page }) => {
+  await page.getByRole('button', { name: /Brutalist Battlecruiser/ }).click();
+  await page.getByRole('navigation', { name: 'Panels' }).getByRole('button', { name: 'Hull' }).click();
+
+  await expect(page.getByText(/revolved by the Aerodynamic Hybrid Cruiser hull/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Switch to that hull' })).toBeVisible();
+});
+
+test('Ship Architect returns a labelled proposal and applies it', async ({ page }) => {
+  await page.getByRole('button', { name: 'Architect' }).click();
+
+  const before = await signature(page);
+
+  await page.getByLabel('Describe the ship you want').fill('heavily armoured siege dreadnought');
+  await page.getByRole('button', { name: 'Send brief to the ship architect' }).click();
+
+  // No ANTHROPIC_API_KEY in CI, so this must fall back to the rule engine and
+  // say so, rather than silently pretending a model answered.
+  const reply = page.locator('article').last();
+  await expect(reply.getByText(/Model|Rule-based/)).toBeVisible({ timeout: 35_000 });
+  await expect(reply.getByText(/Architecture/)).toBeVisible();
+
+  await page.waitForTimeout(1500);
+  const after = await signature(page);
+  expect(
+    difference(before, after),
+    'the proposal must actually be applied to the ship',
+  ).toBeGreaterThan(0.01);
 });

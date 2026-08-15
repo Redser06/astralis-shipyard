@@ -5,3 +5,6 @@ dist
 playwright-report
 test-results
 .shot*.mjs
+.env
+.env.local
+.env.*.local

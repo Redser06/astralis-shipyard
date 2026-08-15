@@ -7,6 +7,7 @@ import { getArchetype } from '../domain/architectures';
 import { deriveWear, isDerelict } from '../domain/condition';
 import { streamFor } from '../domain/rng';
 import { socketsFor } from './sockets';
+import { useReducedMotion } from './useReducedMotion';
 import { Hull } from './hulls/Hulls';
 import { HullMaterial, EmissiveMaterial } from './materials/HullMaterial';
 import type { RenderMode } from './materials/renderModes';
@@ -146,6 +147,7 @@ function RunningLights({
 
 export function Ship({ blueprint, mode, protrusions, burning, onReady }: ShipProps) {
   const groupRef = useRef<Group>(null);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     if (groupRef.current) onReady?.(groupRef.current);
@@ -172,8 +174,17 @@ export function Ship({ blueprint, mode, protrusions, burning, onReady }: ShipPro
   useFrame((state, delta) => {
     const group = groupRef.current;
     if (!group) return;
-    const t = state.clock.elapsedTime;
 
+    if (reducedMotion) {
+      // Decorative motion only. A derelict still reads as one — it holds a
+      // dead, canted attitude instead of tumbling.
+      group.position.y = 0;
+      group.rotation.z = dead ? 0.22 : 0;
+      group.rotation.x = dead ? 0.09 : 0;
+      return;
+    }
+
+    const t = state.clock.elapsedTime;
     if (dead) {
       // Powerless and tumbling. Slow, uncommanded, slightly off every axis.
       group.rotation.z += delta * 0.09;
@@ -188,7 +199,11 @@ export function Ship({ blueprint, mode, protrusions, burning, onReady }: ShipPro
 
   return (
     <group ref={groupRef}>
-      <Hull archetype={blueprint.architecture} material={hullMaterial} />
+      <Hull
+        archetype={blueprint.architecture}
+        material={hullMaterial}
+        profile={blueprint.hullProfile}
+      />
 
       {sockets.map((socket) => {
         switch (socket.kind) {

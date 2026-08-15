@@ -97,6 +97,29 @@ Wear also degrades performance, so the slider is not purely cosmetic.
 Every stochastic choice draws from a seeded PRNG stored on the blueprint, so a given
 ship renders identically every time. That determinism is covered by tests.
 
+### Ship Architect
+
+Describe the ship you want in plain language and the architect configures it.
+There are two implementations behind one panel, and **every reply is labelled
+with which one answered**:
+
+- **Model** — a language model, called server-side, forced through a tool schema
+  that enumerates the real catalogue so it cannot invent parts. Requires a key
+  (§6).
+- **Rule-based** — a deterministic engine that reads intent from the prompt and
+  then optimises against the real `deriveStats()` model. No key, no network, and
+  it is what the tests run against.
+
+Either way the response passes through the same validator, which rejects unknown
+components and anything you have not researched, and shows its reasoning for
+each choice.
+
+### Hull Sculptor
+
+A draggable cross-section for the aerodynamic archetype. The control points move
+with a pointer or the arrow keys, and the editor draws the identical Catmull-Rom
+curve that the lathe revolves — so the preview cannot disagree with the ship.
+
 ### Diagnostic render modes
 
 Four viewport shading modes: **Photoreal PBR**, **Holo wireframe**, **X-Ray internal**
@@ -127,6 +150,9 @@ Written from observed behaviour, per [`docs/AGENT_PLAYBOOK.md`](docs/AGENT_PLAYB
 - Auto-rotate, rotation speed, light intensity, and the radiator / sensor / RCS toggles
 - Test Burn visibly lengthens the plume and brightens the radiators
 - **Real `.glb` export** via `GLTFExporter`
+- **Ship Architect** — model-backed when a key is configured, deterministic rule
+  engine otherwise, always labelled with which answered
+- **Hull Sculptor** — draggable by pointer or keyboard, driving the real lathe
 - Web Audio synthesised UI sounds, with mute
 - Keyboard-operable controls with visible focus, WebGL2 capability check with a fallback
 
@@ -137,21 +163,13 @@ Written from observed behaviour, per [`docs/AGENT_PLAYBOOK.md`](docs/AGENT_PLAYB
 | **Wear rendering** | Driven through PBR parameters and colour (roughness up, metalness down, soot and rust tinting) — **not** yet per-texel masks. Curvature, cavity-AO and panel-ID masking from `docs/RENDER_PIPELINE.md` §6 is still to come, so wear reads as uniform weathering rather than dirt in the crevices. |
 | **`.glb` export** | Implemented and downloads, but has **not** been opened in Blender to confirm fidelity. |
 | **Responsive layout** | Stacks below `lg`, but is not tuned for phones. |
+| **Hull Sculptor scope** | Shapes the Aerodynamic Hybrid Cruiser only — the other four archetypes are welded plate and truss, not lathed. It says so, and offers to switch hull, rather than sitting there inert. |
+| **Architect rate limiting** | The dev endpoint throttles crudely, in-process. A real deployment needs a shared limiter and a spend cap. |
 
 ### ❌ Absent
 
 No backend, no accounts, no persistence — **a refresh destroys your design.** No GTAO,
 no instancing or LOD, no texture compression. No public gallery, forking or sharing.
-
-### Removed, deliberately
-
-- **AI Ship Architect** — was not a model. It was a `setTimeout` over four
-  `String.includes` branches that swapped in preset configurations. Presenting that as
-  AI was the least honest thing in the codebase, so it is gone until it is real
-  (`docs/PRODUCTION_PLAN.md` §5).
-- **Spline Sculptor** — its points could not be dragged, its "Bezier" curve emitted only
-  polyline `L` commands, and it affected exactly one archetype. Removed rather than left
-  as a third inert control.
 
 ---
 
@@ -171,8 +189,9 @@ Gates:
 ```bash
 npm run typecheck      # tsc --noEmit, strict
 npm run lint           # ESLint, exhaustive-deps as error
-npm test               # Vitest — 43 domain unit tests
-npm run test:visual    # Playwright — 11 behavioural/render tests
+npm test               # Vitest — 76 domain unit tests
+npm run test:visual    # Playwright — 14 behavioural/render tests
+npm run verify:bundle  # fails if an API key ever reaches the client bundle
 ```
 
 **Browser support:** needs WebGL2, and says so on an unsupported browser instead of
@@ -197,6 +216,9 @@ astralis-shipyard/
 │   ├── index.css              Tailwind theme, self-hosted fonts
 │   ├── domain/                Pure logic — never imports three
 │   │   ├── types.ts           Blueprint, Socket, Archetype, wear
+│   │   ├── assistant.ts       Intent parsing, the rule engine, and the
+│   │   │                      validator every model response passes through
+│   │   ├── profile.ts         Catmull-Rom hull cross-section
 │   │   ├── architectures.ts   The five archetypes + stat modifiers
 │   │   ├── components.ts      The component catalogue
 │   │   ├── presets.ts
@@ -214,8 +236,14 @@ astralis-shipyard/
 │   │   ├── parts/             Radiators, engines, turrets, sensors, fuel, FTL
 │   │   ├── environments/      IBL rigs + drydock / nebula / asteroids
 │   │   └── materials/
-│   ├── ui/primitives.tsx
+│   ├── services/architect.ts  Calls /api/architect, falls back to the rules
+│   ├── ui/
+│   │   ├── primitives.tsx
+│   │   ├── HullSculptor.tsx
+│   │   └── ArchitectPanel.tsx
 │   └── export/glb.ts
+├── server/architect.ts        Server-side model call. Holds the API key.
+├── scripts/verify-bundle.mjs  Fails the build if a key reaches the client
 ├── tests/visual/render.spec.ts
 └── docs/
     ├── CODE_REVIEW.md         Evidence-based review of the prototype
@@ -229,7 +257,57 @@ stats, gating and wear determinism be unit-tested without a GPU.
 
 ---
 
-## 6. Two things worth knowing before you change the build
+## 6. Configuring the Ship Architect
+
+The architect works with no configuration at all — it falls back to the
+deterministic rule engine and labels its replies **Rule-based**. To use a model:
+
+```bash
+cp .env.example .env.local
+# then set ANTHROPIC_API_KEY=sk-ant-...
+npm run dev
+```
+
+Replies then come back labelled **Model**.
+
+### How the key is protected
+
+- The key is read by `server/architect.ts`, which runs in the **dev server's Node
+  process**, never in the browser. The client only ever POSTs a prompt to
+  `/api/architect`.
+- It is deliberately **not** exposed through Vite's `define`, and **not**
+  prefixed `VITE_`, either of which would inline it into the client bundle.
+- `npm run verify:bundle` greps the built output for API keys and fails the
+  build if one appears. It runs in CI on every PR. That check is itself verified
+  — inject a fake key into `dist/` and it exits non-zero.
+- `.env.local` is gitignored.
+
+### How the model's output is contained
+
+The model is forced through a tool call whose schema enumerates the real
+catalogue, so it cannot name a component that does not exist. Its response is
+then treated as untrusted input by `validateProposal()`:
+
+- unknown component ids are rejected and the current value is kept
+- **locked technology is refused even if the model asks for it** — the research
+  gate is enforced server-of-truth-side, not just in the UI
+- `condition` is clamped to [0, 1]; names are length-capped; `accentColor` must
+  match a hex triplet
+- malformed or hostile input never throws; it degrades to "kept what you had"
+
+Everything rejected is shown to the user in the reply, rather than silently
+swallowed.
+
+### Deploying it
+
+`server/architect.ts` is a plain async function, so wrap it in whatever function
+runtime you deploy to and route `POST /api/architect` at it. The dev-only
+throttle in `vite.config.ts` is per-process and naive — put a real rate limit and
+a spend cap in front of it before exposing it publicly.
+
+---
+
+## 7. Two things worth knowing before you change the build
 
 **Tailwind runs through PostCSS, not `@tailwindcss/vite`.** As of `tailwindcss@4.3.3`,
 the Vite plugin under Vite 8 emits the theme and the layer scaffolding but **no
@@ -245,7 +323,7 @@ the shell imports at module scope must stay free of `three`, which is why
 
 ---
 
-## 7. Where this is going
+## 8. Where this is going
 
 [`docs/PRODUCTION_PLAN.md`](docs/PRODUCTION_PLAN.md) has the full sequence. What remains:
 
@@ -253,12 +331,12 @@ the shell imports at module scope must stay free of `three`, which is why
 | :--- | :--- |
 | **2** | Persistence — Supabase, auth, blueprint CRUD, autosave, version history |
 | **4b** | Per-texel wear masks (curvature, cavity AO, panel ID) via TSL node materials |
-| **5** | Share it — public gallery, forking, and a real AI architect |
+| **5** | Share it — public gallery and forking |
 | **6** | Harden — GTAO, instancing, LOD, texture compression, phone layouts |
 
 ---
 
-## 8. Contributing
+## 9. Contributing
 
 CI gates typecheck, lint, unit tests, build and the browser suite on every PR. Beyond
 that:

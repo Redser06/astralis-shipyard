@@ -1,3 +1,4 @@
+import { DEFAULT_HULL_PROFILE } from './profile';
 import type { Blueprint } from './types';
 
 /**
@@ -22,6 +23,7 @@ export const SHIP_PRESETS: readonly Blueprint[] = [
     accentColor: '#38BDF8',
     condition: 0.12,
     seed: 0x5f44a1,
+    hullProfile: DEFAULT_HULL_PROFILE,
   },
   {
     id: 'expanse_hauler',
@@ -38,6 +40,7 @@ export const SHIP_PRESETS: readonly Blueprint[] = [
     // A working hauler, not a showpiece.
     condition: 0.62,
     seed: 0xe9c0de,
+    hullProfile: DEFAULT_HULL_PROFILE,
   },
   {
     id: 'leviathan_cruiser',
@@ -53,6 +56,7 @@ export const SHIP_PRESETS: readonly Blueprint[] = [
     accentColor: '#F43F5E',
     condition: 0.28,
     seed: 0xbc99de,
+    hullProfile: DEFAULT_HULL_PROFILE,
   },
   {
     id: 'helios_science',
@@ -68,6 +72,7 @@ export const SHIP_PRESETS: readonly Blueprint[] = [
     accentColor: '#10B981',
     condition: 0.05,
     seed: 0x5c1707,
+    hullProfile: DEFAULT_HULL_PROFILE,
   },
 ];
 

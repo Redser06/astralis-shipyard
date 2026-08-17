@@ -150,6 +150,18 @@ Written from observed behaviour, per [`docs/AGENT_PLAYBOOK.md`](docs/AGENT_PLAYB
   so the marks are the condition slider's story rather than a second system
 - **A data-driven component registry** (`src/domain/fittings.ts`) — a new weapon is a
   catalogue entry plus a recipe list, in two data tables, with no renderer change
+- **Windows and viewports**, placed by a pure rule engine (`src/domain/windows.ts`)
+  rather than by hand: one large mullioned flight-deck band per ship and small
+  individually-framed portholes elsewhere, seated on the measured hull skin, kept
+  clear of the drives and the weapon mounts, **never cut near a fuel bay**, spaced
+  so the plate between them still carries load, and rationed by a hard glazed-area
+  budget. Glazing answers the condition slider: a derelict's ports are dark, and
+  some of them are cracked or blown out of their frames
+- **Exterior lighting that is lighting** (`src/domain/exteriorLights.ts`) — bow, waist
+  and drive-bay floodlights that mount on plate, carry visible fixtures, and cast
+  real spot beams onto the hull, plus navigation lamps on the maritime convention:
+  red to port, green to starboard, white forward, anti-collision strobes at the
+  extremities. All of it goes out when the ship does
 - Orbit camera by mouse **and touch**, five camera presets
 - Three environments: orbital drydock with gantry and welding sparks, ion nebula,
   asteroid belt
@@ -233,6 +245,8 @@ astralis-shipyard/
 │   │   ├── condition.ts       The wear system  (+ condition.test.ts)
 │   │   ├── fittings.ts        Component registry — shapes as data  (+ test)
 │   │   ├── damage.ts          Where wear puts its marks  (+ damage.test.ts)
+│   │   ├── windows.ts         Glazing rules and exclusions  (+ windows.test.ts)
+│   │   ├── exteriorLights.ts  Floodlight and nav-light rig  (+ test)
 │   │   ├── rng.ts             Seeded PRNG  (+ rng.test.ts)
 │   │   └── sound.ts
 │   ├── render/
@@ -243,6 +257,8 @@ astralis-shipyard/
 │   │   ├── hulls/             One component per archetype
 │   │   ├── parts/             Radiators, engines, turrets, sensors, fuel, FTL
 │   │   ├── damage/            Decal projection + procedural damage stamps
+│   │   ├── windows/           Portholes and the mullioned flight deck
+│   │   ├── lighting/          Floodlight fixtures and navigation lamps
 │   │   ├── environments/      IBL rigs + drydock / nebula / asteroids
 │   │   └── materials/
 │   ├── services/architect.ts  Calls /api/architect, falls back to the rules

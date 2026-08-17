@@ -476,12 +476,19 @@ function intersectBox(solid: BoxSolid, origin: Vec3, direction: Vec3): SurfaceHi
     }
     let t1 = (-h - oi) / di;
     let t2 = (h - oi) / di;
-    let faceSign = di > 0 ? -1 : 1;
+    // The face a ray ENTERS through always opposes the ray, so its outward
+    // normal is simply -sign(di) — which is what this already is before the
+    // swap. Negating it again with the swap (as this did) returned a negative
+    // normal for every box face on every archetype: `resolveSocket` hid it,
+    // because a disagreeing normal falls back to the authored one, but anything
+    // that trusts the measured normal got the inward face. Windows on the
+    // starboard side of a box hull were rejected outright as back-facing, and
+    // floodlights seated on a dorsal plate came back aimed into it.
+    const faceSign = di > 0 ? -1 : 1;
     if (t1 > t2) {
       const swap = t1;
       t1 = t2;
       t2 = swap;
-      faceSign = -faceSign;
     }
     if (t1 > tMin) {
       tMin = t1;

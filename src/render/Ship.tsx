@@ -24,6 +24,8 @@ import {
 } from './parts/Parts';
 import { engineBellLength } from './parts/engineProfile';
 import { DamageProvider } from './damage/Damage';
+import { ShipWindows } from './windows/Windows';
+import { ExteriorLights } from './lighting/ExteriorLights';
 import type { HullVolume } from '../domain/hullForm';
 
 interface ShipProps {
@@ -305,6 +307,29 @@ export function Ship({ blueprint, mode, protrusions, burning, onReady }: ShipPro
           volumes={volumes}
           seed={blueprint.seed}
           accentColor={blueprint.accentColor}
+          dead={dead}
+          mode={mode}
+        />
+
+        {/* Glazing, and the exterior lighting rig. Both take the same measured
+            hull volumes and the same resolved sockets as everything else on the
+            ship: a porthole is seated on the skin by ray cast, and it is kept
+            off the fuel bays by a rule engine rather than by a coordinate
+            somebody checked once. See `domain/windows.ts`. */}
+        <ShipWindows
+          archetype={blueprint.architecture}
+          volumes={volumes}
+          sockets={sockets}
+          seed={blueprint.seed}
+          wear={wear}
+          condition={blueprint.condition}
+          mode={mode}
+        />
+
+        <ExteriorLights
+          archetype={blueprint.architecture}
+          volumes={volumes}
+          seed={blueprint.seed}
           dead={dead}
           mode={mode}
         />

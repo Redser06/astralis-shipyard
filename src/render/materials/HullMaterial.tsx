@@ -66,12 +66,38 @@ export function EmissiveMaterial({
   color,
   intensity = 2,
   mode,
+  toneMapped = false,
 }: {
   color: string;
   intensity?: number;
   mode: RenderMode;
+  /**
+   * Trim bypasses ACES by default, which is what makes a running light read as
+   * a light rather than as a pale dot. Large-area emitters — window glazing
+   * above all — must opt back IN, or they clip to flat white and the bloom
+   * pass smears them across the hull.
+   */
+  toneMapped?: boolean;
 }) {
   if (mode === 'wireframe') return <meshBasicMaterial color={color} wireframe />;
+
+  // X-Ray draws the hull as an additive transparent shell so you can see the
+  // structure through it. An opaque standard material inside that shell renders
+  // as a solid lump floating in the middle of the ship — which is exactly what
+  // every emissive fitting did, because this branch did not exist.
+  if (mode === 'xray') {
+    return (
+      <meshBasicMaterial
+        color={color}
+        transparent
+        opacity={0.42}
+        depthWrite={false}
+        blending={AdditiveBlending}
+        side={DoubleSide}
+      />
+    );
+  }
+
   return (
     <meshStandardMaterial
       color="#000000"
@@ -79,7 +105,7 @@ export function EmissiveMaterial({
       emissiveIntensity={mode === 'thermal' ? intensity * 1.6 : intensity}
       roughness={0.4}
       metalness={0}
-      toneMapped={false}
+      toneMapped={toneMapped}
     />
   );
 }

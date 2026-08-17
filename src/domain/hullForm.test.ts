@@ -191,3 +191,55 @@ describe('hull bounds', () => {
     expect(bounds.minZ).toBeCloseTo(-8.7, 1);
   });
 });
+
+describe('box face normals', () => {
+  /**
+   * Added in R3, with the fix for the bug it caught.
+   *
+   * `intersectBox` negated its face sign a second time when it swapped the slab
+   * intervals, so every box face reported an INWARD normal no matter which side
+   * the ray came from. `resolveSocket` hid it — a normal that disagrees with the
+   * authored one is discarded — but everything downstream that trusts the
+   * measured normal got the wrong hemisphere: window candidates on the starboard
+   * side of a box hull were rejected as back-facing, so four of the five
+   * archetypes were glazed only to port.
+   */
+  const cube: HullVolume[] = [{ kind: 'box', size: [2, 2, 2], position: [0, 0, 0] }];
+
+  it('points out of the face the ray enters through, from any direction', () => {
+    const cases: Array<{ from: Vec3; direction: Vec3; face: Vec3 }> = [
+      { from: [10, 0, 0], direction: [-1, 0, 0], face: [1, 0, 0] },
+      { from: [-10, 0, 0], direction: [1, 0, 0], face: [-1, 0, 0] },
+      { from: [0, 10, 0], direction: [0, -1, 0], face: [0, 1, 0] },
+      { from: [0, -10, 0], direction: [0, 1, 0], face: [0, -1, 0] },
+      { from: [0, 0, 10], direction: [0, 0, -1], face: [0, 0, 1] },
+      { from: [0, 0, -10], direction: [0, 0, 1], face: [0, 0, -1] },
+    ];
+    for (const { from, direction, face } of cases) {
+      const hit = raycastHull(cube, from, direction);
+      expect(hit, `ray from ${from.join(',')}`).not.toBeNull();
+      expect(hit!.normal[0]).toBeCloseTo(face[0], 6);
+      expect(hit!.normal[1]).toBeCloseTo(face[1], 6);
+      expect(hit!.normal[2]).toBeCloseTo(face[2], 6);
+      // And it opposes the ray, which is the property that actually matters.
+      expect(
+        hit!.normal[0] * direction[0] +
+          hit!.normal[1] * direction[1] +
+          hit!.normal[2] * direction[2],
+      ).toBeLessThan(0);
+    }
+  });
+
+  it('holds on the real hulls, port and starboard alike', () => {
+    for (const archetype of ARCHETYPES) {
+      const volumes = hullVolumes(archetype);
+      for (const side of [-1, 1]) {
+        const direction: Vec3 = [-side, 0, 0];
+        const hit = raycastHull(volumes, [side * 60, 0, 0], direction);
+        if (!hit) continue;
+        expect(hit.normal[0] * side, `${archetype} ${side > 0 ? 'starboard' : 'port'}`)
+          .toBeGreaterThan(0);
+      }
+    }
+  });
+});

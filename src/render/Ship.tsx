@@ -5,7 +5,7 @@ import type { Blueprint } from '../domain/types';
 import { getMaterial } from '../domain/components';
 import { getArchetype } from '../domain/architectures';
 import { deriveWear, isDerelict } from '../domain/condition';
-import { streamFor } from '../domain/rng';
+import { ftlPylonReach, hullVolumes, runningLightAnchors } from '../domain/hullForm';
 import { socketsFor } from './sockets';
 import { useReducedMotion } from './useReducedMotion';
 import { Hull } from './hulls/Hulls';
@@ -22,6 +22,8 @@ import {
   SocketMount,
   Turret,
 } from './parts/Parts';
+import { engineBellLength } from './parts/engineProfile';
+import type { HullVolume } from '../domain/hullForm';
 
 interface ShipProps {
   blueprint: Blueprint;
@@ -104,25 +106,28 @@ function ExhaustPlume({
 
 /* --------------------------- Running lights --------------------------- */
 
+/**
+ * Navigation lamps, sampled off the hull surface rather than out of a box.
+ *
+ * The box was ±2.6 × ±0.8 × ±6.5 and keyed only on the seed, so the fourteen
+ * positions came out byte-identical on all five archetypes: roughly half sat in
+ * open vacuum beside the ship and most of the rest were sealed inside solid
+ * plate. `runningLightAnchors` ray-casts the real hull instead.
+ */
 function RunningLights({
+  volumes,
   seed,
   accentColor,
   dead,
   mode,
 }: {
+  volumes: readonly HullVolume[];
   seed: number;
   accentColor: string;
   dead: boolean;
   mode: RenderMode;
 }) {
-  const lamps = useMemo(() => {
-    const rng = streamFor(seed, 'lamps');
-    return Array.from({ length: 14 }, () => ({
-      x: (rng() - 0.5) * 5.2,
-      y: (rng() - 0.5) * 1.6,
-      z: (rng() - 0.5) * 13,
-    }));
-  }, [seed]);
+  const lamps = useMemo(() => runningLightAnchors(volumes, seed), [volumes, seed]);
 
   // A derelict has no power. Killing the lights is most of what sells it.
   if (dead) return null;
@@ -130,7 +135,7 @@ function RunningLights({
   return (
     <group>
       {lamps.map((lamp, i) => (
-        <mesh key={i} position={[lamp.x, lamp.y, lamp.z]}>
+        <mesh key={i} position={[lamp.position[0], lamp.position[1], lamp.position[2]]}>
           <sphereGeometry args={[0.045, 6, 6]} />
           <EmissiveMaterial
             mode={mode}
@@ -159,8 +164,18 @@ export function Ship({ blueprint, mode, protrusions, burning, onReady }: ShipPro
   );
   const dead = isDerelict(blueprint.condition);
   const materialSpec = useMemo(() => getMaterial(blueprint.material), [blueprint.material]);
-  const sockets = useMemo(() => socketsFor(blueprint.architecture), [blueprint.architecture]);
   const archetype = useMemo(() => getArchetype(blueprint.architecture), [blueprint.architecture]);
+
+  // The hull as solid volumes. Sockets, lamps and the warp ring's pylons are all
+  // measured against these, so hardware is seated on the hull that renders.
+  const volumes = useMemo(
+    () => hullVolumes(blueprint.architecture, blueprint.hullProfile),
+    [blueprint.architecture, blueprint.hullProfile],
+  );
+  const sockets = useMemo(
+    () => socketsFor(blueprint.architecture, volumes),
+    [blueprint.architecture, volumes],
+  );
 
   const hullMaterial = (
     <HullMaterial
@@ -211,7 +226,9 @@ export function Ship({ blueprint, mode, protrusions, burning, onReady }: ShipPro
             return (
               <SocketMount key={socket.id} socket={socket}>
                 <EngineBell sublight={blueprint.sublight} burning={burning} dead={dead} />
-                <group position={[0, 0.9, 0]}>
+                {/* Starts at the bell's mouth, which now depends on the drive
+                    fitted rather than on a constant that suited one of them. */}
+                <group position={[0, engineBellLength(blueprint.sublight), 0]}>
                   <ExhaustPlume
                     burning={burning}
                     color={blueprint.accentColor}
@@ -267,6 +284,7 @@ export function Ship({ blueprint, mode, protrusions, burning, onReady }: ShipPro
                   mode={mode}
                   dead={dead}
                   ringRadius={archetype.ringRadius}
+                  pylonReach={ftlPylonReach(volumes, socket.position[2], archetype.ringRadius * 0.5)}
                 />
               </group>
             );
@@ -274,6 +292,7 @@ export function Ship({ blueprint, mode, protrusions, burning, onReady }: ShipPro
       })}
 
       <RunningLights
+        volumes={volumes}
         seed={blueprint.seed}
         accentColor={blueprint.accentColor}
         dead={dead}

@@ -1,13 +1,6 @@
 import { useMemo, useRef, type ReactNode } from 'react';
 import { useFrame } from '@react-three/fiber';
-import {
-  CatmullRomCurve3,
-  Matrix4,
-  Quaternion,
-  Vector3,
-  type Mesh,
-  type MeshStandardMaterial,
-} from 'three';
+import { Matrix4, Quaternion, Vector3, type Mesh, type MeshStandardMaterial } from 'three';
 import type {
   FtlId,
   FuelId,
@@ -20,6 +13,10 @@ import type {
 import { EmissiveMaterial } from '../materials/HullMaterial';
 import { ENGINE_PROFILE } from './engineProfile';
 import type { RenderMode } from '../materials/renderModes';
+import { Conduit, Fitting, MountFlange } from './Fitting';
+import { HYPER_SHUNT_HOUSING, getWeaponFitting } from '../../domain/fittings';
+import type { DamageOptions, DamageSurface } from '../../domain/damage';
+import { SurfaceDamage } from '../damage/Damage';
 
 /**
  * Hardware that mounts to hull sockets.
@@ -106,88 +103,54 @@ export function SocketMount({
 /* --------------------------- Shared fittings --------------------------- */
 
 /**
- * The visible base every mount gets: a bolt ring and a short collar, sunk
- * fractionally into the plate so no seam of daylight shows at the joint.
+ * `MountFlange` and `Conduit` moved to `./Fitting.tsx` when the component
+ * registry landed: the recipe renderer needs both, and a shared fitting that
+ * exists in two files is a shared fitting that will diverge.
  */
-function MountFlange({
-  radius,
-  height = 0.09,
-  color = '#2b3648',
-}: {
-  radius: number;
-  height?: number;
-  color?: string;
-}) {
-  return (
-    <group>
-      <mesh position={[0, height / 2 - 0.03, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[radius * 0.84, radius, height, 12]} />
-        <meshStandardMaterial color={color} roughness={0.6} metalness={0.85} />
-      </mesh>
-      <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-        <torusGeometry args={[radius * 0.95, 0.03, 6, 16]} />
-        <meshStandardMaterial color="#1e293b" roughness={0.5} metalness={0.9} />
-      </mesh>
-    </group>
-  );
-}
-
-/**
- * A run of pipe between two points that are both on real geometry.
- *
- * TubeGeometry along a Catmull-Rom, declared as JSX so the reconciler owns the
- * geometry's lifetime. The curve itself is a plain maths object, not a GPU
- * resource, and is memoised on scalars so the tube is not rebuilt every frame.
- */
-function Conduit({
-  from,
-  to,
-  bow = 0.16,
-  radius = 0.04,
-  color = '#5b6b82',
-  segments = 16,
-}: {
-  from: readonly [number, number, number];
-  to: readonly [number, number, number];
-  bow?: number;
-  radius?: number;
-  color?: string;
-  segments?: number;
-}) {
-  const [ax, ay, az] = from;
-  const [bx, by, bz] = to;
-
-  const curve = useMemo(() => {
-    const start = new Vector3(ax, ay, az);
-    const end = new Vector3(bx, by, bz);
-    const along = new Vector3().subVectors(end, start);
-    // Bow the run sideways so it reads as a routed pipe, not a strut.
-    let perpendicular = new Vector3().crossVectors(along, new Vector3(0, 0, 1));
-    if (perpendicular.lengthSq() < 1e-8) {
-      perpendicular = new Vector3().crossVectors(along, new Vector3(1, 0, 0));
-    }
-    perpendicular.normalize().multiplyScalar(bow);
-
-    return new CatmullRomCurve3([
-      start,
-      start.clone().lerp(end, 0.33).add(perpendicular),
-      start.clone().lerp(end, 0.66).add(perpendicular),
-      end,
-    ]);
-  }, [ax, ay, az, bx, by, bz, bow]);
-
-  return (
-    <mesh castShadow>
-      <tubeGeometry args={[curve, segments, radius, 6, false]} />
-      <meshStandardMaterial color={color} roughness={0.55} metalness={0.8} />
-    </mesh>
-  );
-}
 
 /* --------------------------- Radiators --------------------------- */
 
 const RADIATOR_SPAN = 1.8;
 const RADIATOR_CHORD = 3.0;
+
+/* --------------------------- Weathering --------------------------- */
+
+/**
+ * How the hand-authored parts weather, and on which of their own surfaces.
+ *
+ * Registry components (`domain/fittings.ts`) carry this as data on the
+ * definition. These four predate the registry and are kept as code because
+ * they animate — the bell pulses, the panels glow, the plume tracks the
+ * burn — so the surfaces are declared here instead. Module scope, because
+ * `SurfaceDamage` memoises on them: a fresh object every render would rebuild
+ * every DecalGeometry every frame.
+ */
+const RADIATOR_PANEL: DamageSurface = {
+  kind: 'plane',
+  width: RADIATOR_CHORD,
+  height: RADIATOR_SPAN * 0.86,
+};
+/** A radiator is the thinnest, most exposed thing on a ship: it gets holed. */
+const RADIATOR_DAMAGE: DamageOptions = {
+  exposure: { impact: 2.0, structural: 1.5, thermal: 1.2, repair: 1.3 },
+  density: 0.7,
+  max: 4,
+};
+/** Nothing on a ship scorches like the thing that is on fire. */
+const ENGINE_DAMAGE: DamageOptions = {
+  exposure: { thermal: 2.6, grime: 1.4, oxidation: 0.7 },
+  density: 0.7,
+  max: 4,
+};
+/** Tanks are sealed and rarely replaced: they stain rather than get patched. */
+const TANK_DAMAGE: DamageOptions = {
+  exposure: { oxidation: 1.7, grime: 1.4, repair: 0.5 },
+  density: 0.6,
+  max: 3,
+};
+const CRYO_TANK: DamageSurface = { kind: 'capsule', radius: 0.62, length: 2.6 };
+const MAGNETIC_BOTTLE: DamageSurface = { kind: 'capsule', radius: 0.3, length: 1.5 };
+const ANTIMATTER_POD: DamageSurface = { kind: 'sphere', radius: 0.55 };
 
 /**
  * Heat-rejection panel. Glow responds to `burning` and to thermal wear.
@@ -258,6 +221,11 @@ export function Radiator({
             toneMapped={false}
             side={2}
           />
+          <SurfaceDamage
+            surface={RADIATOR_PANEL}
+            tag={`radiator-${side}`}
+            options={RADIATOR_DAMAGE}
+          />
         </mesh>
       ))}
 
@@ -298,6 +266,18 @@ export function EngineBell({
   const profile = ENGINE_PROFILE[sublight];
   const coreRef = useRef<Mesh>(null);
 
+  // Matches the housing's own cylinderGeometry, so the scorching lands on the
+  // bell that is actually fitted rather than on the tier-2 one it was tuned to.
+  const housing = useMemo<DamageSurface>(
+    () => ({
+      kind: 'cylinder',
+      radiusTop: profile.radius,
+      radiusBottom: profile.radius * 0.72,
+      height: profile.length,
+    }),
+    [profile],
+  );
+
   useFrame((state) => {
     const mesh = coreRef.current;
     if (!mesh) return;
@@ -321,6 +301,7 @@ export function EngineBell({
       <mesh castShadow receiveShadow position={[0, profile.length / 2, 0]}>
         <cylinderGeometry args={[profile.radius, profile.radius * 0.72, profile.length, 14]} />
         <meshStandardMaterial color="#475569" roughness={0.45} metalness={0.9} />
+        <SurfaceDamage surface={housing} tag={`engine-${sublight}`} options={ENGINE_DAMAGE} />
       </mesh>
 
       {/* Nozzle throat, capping the mouth. Two things were wrong with it: with
@@ -368,9 +349,16 @@ export function EngineBell({
 
 /* --------------------------- Weapons --------------------------- */
 
-/** Shared barbette. Seated on the mount plane, not straddling it. */
-const TURRET_BASE_HEIGHT = 0.34;
-
+/**
+ * Turret hardware, resolved from the component registry.
+ *
+ * This used to be a four-case `switch` of hand-built JSX — around eighty lines
+ * in which each weapon re-declared its own barbette, remembered (or forgot) the
+ * mounting-face convention, and could only be joined by editing this file.
+ * `domain/fittings.ts` now holds the shape of every weapon as data, so a new
+ * one is a catalogue entry plus a recipe list. Three shipped with R2 on exactly
+ * those terms: `autocannon_pod`, `coil_battery` and `rail_lance`.
+ */
 export function Turret({
   weapon,
   mode,
@@ -380,99 +368,7 @@ export function Turret({
   mode: RenderMode;
   dead: boolean;
 }) {
-  const base = (
-    <group>
-      <MountFlange radius={0.56} />
-      <mesh castShadow receiveShadow position={[0, TURRET_BASE_HEIGHT / 2 + 0.06, 0]}>
-        <cylinderGeometry args={[0.42, 0.5, TURRET_BASE_HEIGHT, 10]} />
-        <meshStandardMaterial color="#334155" roughness={0.55} metalness={0.85} />
-      </mesh>
-    </group>
-  );
-
-  switch (weapon) {
-    case 'gauss_cannons':
-      // Twin kinetic barrels.
-      return (
-        <group>
-          {base}
-          {[-0.16, 0.16].map((x) => (
-            <mesh key={x} position={[x, 0.95, 0]} castShadow>
-              <cylinderGeometry args={[0.075, 0.09, 1.4, 8]} />
-              <meshStandardMaterial color="#64748b" roughness={0.4} metalness={0.95} />
-            </mesh>
-          ))}
-        </group>
-      );
-
-    case 'plasma_lance':
-      // One long focusing barrel with an emissive throat.
-      return (
-        <group>
-          {base}
-          <mesh position={[0, 1.35, 0]} castShadow>
-            <cylinderGeometry args={[0.11, 0.17, 1.9, 10]} />
-            <meshStandardMaterial color="#475569" roughness={0.3} metalness={0.95} />
-          </mesh>
-          <mesh position={[0, 2.3, 0]}>
-            <sphereGeometry args={[0.13, 12, 10]} />
-            <EmissiveMaterial mode={mode} color="#38bdf8" intensity={dead ? 0 : 3} />
-          </mesh>
-        </group>
-      );
-
-    case 'quantum_torpedoes':
-      // Boxy launcher, four tubes.
-      return (
-        <group>
-          {base}
-          <mesh position={[0, 0.82, 0]} castShadow receiveShadow>
-            <boxGeometry args={[0.9, 0.62, 1.0]} />
-            <meshStandardMaterial color="#3f4a5c" roughness={0.6} metalness={0.8} />
-          </mesh>
-          {[
-            [-0.24, 0.24],
-            [0.24, 0.24],
-            [-0.24, -0.24],
-            [0.24, -0.24],
-          ].map(([x, z], i) => (
-            <mesh key={i} position={[x!, 1.15, z!]} rotation={[Math.PI / 2, 0, 0]}>
-              <cylinderGeometry args={[0.11, 0.11, 0.14, 8]} />
-              <EmissiveMaterial mode={mode} color="#c084fc" intensity={dead ? 0 : 2.2} />
-            </mesh>
-          ))}
-        </group>
-      );
-
-    case 'tachyon_disruptor':
-      // Crystalline superluminal emitter on a short pedestal.
-      return (
-        <group>
-          {base}
-          <mesh position={[0, 0.62, 0]} castShadow>
-            <cylinderGeometry args={[0.16, 0.22, 0.4, 8]} />
-            <meshStandardMaterial color="#3f4a5c" roughness={0.5} metalness={0.9} />
-          </mesh>
-          <mesh position={[0, 1.15, 0]} castShadow>
-            <octahedronGeometry args={[0.46, 0]} />
-            <meshStandardMaterial
-              color="#0f172a"
-              emissive="#f43f5e"
-              emissiveIntensity={dead ? 0 : 2.4}
-              roughness={0.15}
-              metalness={0.9}
-              toneMapped={false}
-            />
-          </mesh>
-          {[0, 1, 2].map((i) => (
-            <mesh key={i} position={[0, 1.15, 0]} rotation={[0, (i * Math.PI) / 3, 0]}>
-              <torusGeometry args={[0.6, 0.03, 5, 20]} />
-              <EmissiveMaterial mode={mode} color="#fb7185" intensity={dead ? 0 : 1.6} />
-            </mesh>
-          ))}
-        </group>
-      );
-  }
+  return <Fitting def={getWeaponFitting(weapon)} mode={mode} dead={dead} />;
 }
 
 /* --------------------------- Sensors --------------------------- */
@@ -581,6 +477,7 @@ export function FtlCore({
   dead,
   ringRadius,
   pylonReach,
+  dorsalReach,
 }: {
   ftl: FtlId;
   mode: RenderMode;
@@ -592,6 +489,11 @@ export function FtlCore({
    * ring's own station. Measured off the hull, so the spokes land on plate.
    */
   pylonReach?: readonly number[];
+  /**
+   * Height of the dorsal skin above the FTL station, measured the same way.
+   * The hyperspace shunt is a surface fitting and needs somewhere to sit.
+   */
+  dorsalReach?: number;
 }) {
   const spinRef = useRef<Mesh>(null);
 
@@ -604,20 +506,16 @@ export function FtlCore({
       return null;
 
     case 'hyper_shunt':
-      // The one part deliberately centred on its socket: it is an internal
-      // component bay, not a surface fitting.
+      // R1-11. This used to be a 1.5 x 0.85 x 1.5 box drawn *at* the FTL
+      // socket — and that socket is on the centreline of every archetype, so
+      // fitting the tier-1 FTL dropped WARP to 8 and produced no visible
+      // geometry anywhere on the ship. On the Industrial hull its side faces
+      // were also exactly coplanar with the 1.5-wide spine, so what little of
+      // it could have shown would have z-fought. It is now a registry fitting
+      // raised onto the dorsal skin, measured at the shunt's own station.
       return (
-        <group>
-          <mesh castShadow receiveShadow>
-            <boxGeometry args={[1.5, 0.85, 1.5]} />
-            <meshStandardMaterial color="#334155" roughness={0.55} metalness={0.85} />
-          </mesh>
-          {[-0.5, 0, 0.5].map((z, i) => (
-            <mesh key={i} position={[0.78, 0, z]} rotation={[0, 0, Math.PI / 2]}>
-              <planeGeometry args={[0.5, 0.12]} />
-              <EmissiveMaterial mode={mode} color="#38bdf8" intensity={dead ? 0 : 2.4} />
-            </mesh>
-          ))}
+        <group position={[0, dorsalReach ?? 0.9, 0]}>
+          <Fitting def={HYPER_SHUNT_HOUSING} mode={mode} dead={dead} />
         </group>
       );
 
@@ -732,6 +630,7 @@ export function FuelPod({
           <mesh position={[0, 0.68, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
             <capsuleGeometry args={[0.62, 2.6, 6, 14]} />
             <meshStandardMaterial color="#e2e8f0" roughness={0.35} metalness={0.5} />
+            <SurfaceDamage surface={CRYO_TANK} tag="fuel-cryo" options={TANK_DAMAGE} />
           </mesh>
           <Conduit from={[0.12, 0.02, 0.1]} to={[0.1, 0.62, 0.9]} bow={0.08} />
         </group>
@@ -751,6 +650,11 @@ export function FuelPod({
             >
               <capsuleGeometry args={[0.3, 1.5, 6, 12]} />
               <meshStandardMaterial color="#94a3b8" roughness={0.3} metalness={0.75} />
+              <SurfaceDamage
+                surface={MAGNETIC_BOTTLE}
+                tag={`fuel-bottle-${x}`}
+                options={TANK_DAMAGE}
+              />
             </mesh>
           ))}
           <Conduit from={[-0.42, 0.05, 0.5]} to={[0.42, 0.36, 0.5]} bow={0.1} radius={0.035} />
@@ -764,6 +668,7 @@ export function FuelPod({
           <mesh position={[0, 0.62, 0]} castShadow receiveShadow>
             <sphereGeometry args={[0.55, 20, 14]} />
             <meshStandardMaterial color="#1e293b" roughness={0.2} metalness={0.95} />
+            <SurfaceDamage surface={ANTIMATTER_POD} tag="fuel-antimatter" options={TANK_DAMAGE} />
           </mesh>
           <mesh position={[0, 0.62, 0]} rotation={[Math.PI / 2, 0, 0]}>
             <torusGeometry args={[0.68, 0.05, 8, 28]} />

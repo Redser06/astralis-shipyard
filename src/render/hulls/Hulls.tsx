@@ -1,8 +1,10 @@
-import { useMemo, type ReactElement } from 'react';
+import { useMemo, type ReactElement, type ReactNode } from 'react';
 import { Vector2 } from 'three';
 import type { ArchetypeId, Vec3 } from '../../domain/types';
 import { DEFAULT_HULL_PROFILE, sampleProfile, type ProfilePoint } from '../../domain/profile';
-import { HULL_SOLIDS, axisRotation, type Solid } from '../../domain/hullForm';
+import { HULL_SOLIDS, axisRotation, hullBounds, hullVolumes, type Solid } from '../../domain/hullForm';
+import { stationExposure, surfaceForSolid, type DamageOptions } from '../../domain/damage';
+import { SurfaceDamage } from '../damage/Damage';
 
 /**
  * Hull geometry, one mesh per declared solid.
@@ -28,7 +30,12 @@ const asTuple = (v: Vec3): [number, number, number] => [v[0], v[1], v[2]];
 
 /* ------------------------------------------------------------------ */
 
-function LatheHull({ material, profile, segments }: HullProps & { segments: number }) {
+function LatheHull({
+  material,
+  profile,
+  segments,
+  damage,
+}: HullProps & { segments: number; damage?: ReactNode }) {
   // The one archetype built to meet atmosphere. Its cross-section is revolved
   // from the Hull Sculptor's control points, sampled through the same
   // Catmull-Rom the 2D editor draws — so what you draw is what you get.
@@ -48,6 +55,7 @@ function LatheHull({ material, profile, segments }: HullProps & { segments: numb
     <mesh rotation={asTuple(axisRotation('z'))} castShadow receiveShadow>
       <latheGeometry args={[points, segments]} />
       {material}
+      {damage}
     </mesh>
   );
 }
@@ -56,7 +64,8 @@ function SolidMesh({
   solid,
   material,
   profile,
-}: { solid: Solid } & HullProps): ReactElement | null {
+  damage,
+}: { solid: Solid; damage?: ReactNode } & HullProps): ReactElement | null {
   switch (solid.kind) {
     case 'box':
       return (
@@ -68,6 +77,7 @@ function SolidMesh({
         >
           <boxGeometry args={[solid.size[0], solid.size[1], solid.size[2]]} />
           {material}
+          {damage}
         </mesh>
       );
 
@@ -76,6 +86,7 @@ function SolidMesh({
         <mesh position={asTuple(solid.position)} castShadow receiveShadow>
           <sphereGeometry args={[solid.radius, solid.segments?.[0] ?? 18, solid.segments?.[1] ?? 12]} />
           {material}
+          {damage}
         </mesh>
       );
 
@@ -91,6 +102,7 @@ function SolidMesh({
             args={[solid.radius, solid.length, solid.segments?.[0] ?? 4, solid.segments?.[1] ?? 12]}
           />
           {material}
+          {damage}
         </mesh>
       );
 
@@ -107,6 +119,7 @@ function SolidMesh({
             args={[solid.radiusEnd, solid.radiusStart, solid.height, solid.sides]}
           />
           {material}
+          {damage}
         </mesh>
       );
 
@@ -126,17 +139,62 @@ function SolidMesh({
       );
 
     case 'lathe':
-      return <LatheHull material={material} profile={profile} segments={solid.segments} />;
+      return (
+        <LatheHull
+          material={material}
+          profile={profile}
+          segments={solid.segments}
+          damage={damage}
+        />
+      );
   }
 }
 
 export function Hull({ archetype, material, profile }: { archetype: ArchetypeId } & HullProps) {
   const solids = HULL_SOLIDS[archetype];
+
+  /**
+   * Battle damage, one set per plate.
+   *
+   * A decal has to be projected onto a specific mesh, so the marks are placed
+   * per solid, in that solid's own geometry frame, and rendered as its child.
+   * Whether any of them appear at all is decided by `DamageProvider` in
+   * `Ship` — this only says where they would go.
+   */
+  const damage = useMemo(() => {
+    const bounds = hullBounds(hullVolumes(archetype, profile));
+    return solids.map((solid, i) => {
+      const surface = surfaceForSolid(solid, profile ?? DEFAULT_HULL_PROFILE);
+      if (!surface) return null;
+      // The lathe is a single mesh spanning the whole ship, so it takes the
+      // exposure of its midpoint rather than of a station it does not have.
+      const z = solid.kind === 'lathe' ? (bounds.minZ + bounds.maxZ) / 2 : solid.position[2];
+      const options: DamageOptions = {
+        exposure: stationExposure(z, bounds.minZ, bounds.maxZ),
+        max: 8,
+      };
+      return { surface, options, tag: `hull:${archetype}:${i}` };
+    });
+  }, [archetype, profile, solids]);
+
   return (
     <group>
-      {solids.map((solid, i) => (
-        <SolidMesh key={`${solid.kind}-${i}`} solid={solid} material={material} profile={profile} />
-      ))}
+      {solids.map((solid, i) => {
+        const marks = damage[i];
+        return (
+          <SolidMesh
+            key={`${solid.kind}-${i}`}
+            solid={solid}
+            material={material}
+            profile={profile}
+            damage={
+              marks ? (
+                <SurfaceDamage surface={marks.surface} tag={marks.tag} options={marks.options} />
+              ) : null
+            }
+          />
+        );
+      })}
     </group>
   );
 }

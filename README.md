@@ -72,7 +72,7 @@ changes the geometry**, not just a label.
 | :--- | :--- |
 | **Sublight drive** | Ion pulse → magnetoplasmadynamic torch → thermonuclear fusion torch |
 | **FTL core** | None → hyperspace shunt → Alcubierre warp ring → graviton fold engine |
-| **Weapons** | Gauss railguns → plasma lance → quantum torpedoes → tachyon disruptor |
+| **Weapons** | Seven mounts: rotary autocannon → gauss railguns → coilgun battery → plasma lance → heavy rail lance → quantum torpedoes → tachyon disruptor |
 | **Sensors** | Radar dome → coherent LADAR spine → tachyon spacetime scanner |
 | **Fuel** | Cryogenic H₂ bulk tanks → D-He3 magnetic bottles → antimatter pods → zero-point micro-singularity |
 | **Hull composite** | Duranium plating → carbon-nanotube weave → titanium-aerogel → chronium metamaterial |
@@ -144,6 +144,12 @@ Written from observed behaviour, per [`docs/AGENT_PLAYBOOK.md`](docs/AGENT_PLAYB
 - **Research gating** that actually gates — locked technology is disabled in the
   Designer with the cost shown, and presets containing locked tech are disabled too
 - The condition system, end to end, including the derelict state
+- **Located battle damage** — scorches, pits, dents, rust runs, mismatched patch
+  plates and torn breaches, projected as decals onto the hull *and* onto fitted
+  hardware. Deterministic from the seed and driven by the same seven wear channels,
+  so the marks are the condition slider's story rather than a second system
+- **A data-driven component registry** (`src/domain/fittings.ts`) — a new weapon is a
+  catalogue entry plus a recipe list, in two data tables, with no renderer change
 - Orbit camera by mouse **and touch**, five camera presets
 - Three environments: orbital drydock with gantry and welding sparks, ion nebula,
   asteroid belt
@@ -160,7 +166,7 @@ Written from observed behaviour, per [`docs/AGENT_PLAYBOOK.md`](docs/AGENT_PLAYB
 
 | Area | Reality |
 | :--- | :--- |
-| **Wear rendering** | Driven through PBR parameters and colour (roughness up, metalness down, soot and rust tinting) — **not** yet per-texel masks. Curvature, cavity-AO and panel-ID masking from `docs/RENDER_PIPELINE.md` §6 is still to come, so wear reads as uniform weathering rather than dirt in the crevices. |
+| **Wear rendering** | Two of three layers are in. PBR parameters and colour move with wear (roughness up, metalness down, soot and rust tinting), and discrete damage is placed as decals — one mark kind per wear channel, on hull plate and on parts. Still **not** per-texel masks: curvature, cavity-AO and panel-ID masking from `docs/RENDER_PIPELINE.md` §6 is what would put grime *in the crevices* rather than on plate the sampler happened to pick. |
 | **`.glb` export** | Implemented and downloads, but has **not** been opened in Blender to confirm fidelity. |
 | **Responsive layout** | Stacks below `lg`, but is not tuned for phones. |
 | **Hull Sculptor scope** | Shapes the Aerodynamic Hybrid Cruiser only — the other four archetypes are welded plate and truss, not lathed. It says so, and offers to switch hull, rather than sitting there inert. |
@@ -189,8 +195,8 @@ Gates:
 ```bash
 npm run typecheck      # tsc --noEmit, strict
 npm run lint           # ESLint, exhaustive-deps as error
-npm test               # Vitest — 76 domain unit tests
-npm run test:visual    # Playwright — 14 behavioural/render tests
+npm test               # Vitest — domain unit tests, no GPU required
+npm run test:visual    # Playwright — behavioural/render tests
 npm run verify:bundle  # fails if an API key ever reaches the client bundle
 ```
 
@@ -225,6 +231,8 @@ astralis-shipyard/
 │   │   ├── stats.ts           Derived stats  (+ stats.test.ts)
 │   │   ├── unlocks.ts         Research gating  (+ unlocks.test.ts)
 │   │   ├── condition.ts       The wear system  (+ condition.test.ts)
+│   │   ├── fittings.ts        Component registry — shapes as data  (+ test)
+│   │   ├── damage.ts          Where wear puts its marks  (+ damage.test.ts)
 │   │   ├── rng.ts             Seeded PRNG  (+ rng.test.ts)
 │   │   └── sound.ts
 │   ├── render/
@@ -234,6 +242,7 @@ astralis-shipyard/
 │   │   ├── viewportOptions.ts Three-free option tables
 │   │   ├── hulls/             One component per archetype
 │   │   ├── parts/             Radiators, engines, turrets, sensors, fuel, FTL
+│   │   ├── damage/            Decal projection + procedural damage stamps
 │   │   ├── environments/      IBL rigs + drydock / nebula / asteroids
 │   │   └── materials/
 │   ├── services/architect.ts  Calls /api/architect, falls back to the rules

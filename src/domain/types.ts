@@ -21,7 +21,14 @@ export type WeaponId =
   | 'gauss_cannons'
   | 'plasma_lance'
   | 'quantum_torpedoes'
-  | 'tachyon_disruptor';
+  | 'tachyon_disruptor'
+  // Added in R2. Each id needs both a catalogue entry in `components.ts` (its
+  // numbers) and a shape in `fittings.ts` (its geometry); `WEAPON_FITTINGS` is
+  // a total record over this union, so omitting the second half is a type
+  // error rather than an invisible turret.
+  | 'autocannon_pod'
+  | 'coil_battery'
+  | 'rail_lance';
 export type SensorId = 'radar_dome' | 'ladar_array' | 'tachyon_scanner';
 export type FuelId = 'cryo_h2' | 'd_he3_bottles' | 'antimatter_pods' | 'zero_point_core';
 export type MaterialId =

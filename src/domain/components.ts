@@ -124,6 +124,40 @@ export const WEAPONS: readonly WeaponSpec[] = [
     heat: 90,
     desc: 'Sub-atomic superluminal particle stream bypassing kinetic shields.',
   },
+  // Added in R2. Kinetics were a single entry, which made "cheap slugs versus
+  // exotic energy" a choice with one option on one side. These three fill the
+  // kinetic line out, and each one's geometry is a data entry in `fittings.ts`
+  // and nothing else — which is the point of shipping them.
+  {
+    id: 'autocannon_pod',
+    name: 'Rotary Autocannon Pod',
+    type: 'Kinetic',
+    tier: 1,
+    damage: 150,
+    rate: 96,
+    heat: 30,
+    desc: 'Three-barrel rotary cannon in a spun cowling. Fast, cheap and hot.',
+  },
+  {
+    id: 'coil_battery',
+    name: 'Quad Coilgun Battery',
+    type: 'Kinetic',
+    tier: 2,
+    damage: 300,
+    rate: 72,
+    heat: 46,
+    desc: 'Four staged induction tubes fed from a shared capacitor bank.',
+  },
+  {
+    id: 'rail_lance',
+    name: 'Mk-VII Heavy Rail Lance',
+    type: 'Kinetic',
+    tier: 3,
+    damage: 540,
+    rate: 40,
+    heat: 58,
+    desc: 'Twin-rail armature launcher throwing a tungsten dart at a fraction of c.',
+  },
 ] as const;
 
 export const SENSORS: readonly SensorSpec[] = [

@@ -5,7 +5,7 @@ import type { Blueprint } from '../domain/types';
 import { getMaterial } from '../domain/components';
 import { getArchetype } from '../domain/architectures';
 import { deriveWear, isDerelict } from '../domain/condition';
-import { ftlPylonReach, hullVolumes, runningLightAnchors } from '../domain/hullForm';
+import { ftlPylonReach, hullReach, hullVolumes, runningLightAnchors } from '../domain/hullForm';
 import { socketsFor } from './sockets';
 import { useReducedMotion } from './useReducedMotion';
 import { Hull } from './hulls/Hulls';
@@ -23,6 +23,7 @@ import {
   Turret,
 } from './parts/Parts';
 import { engineBellLength } from './parts/engineProfile';
+import { DamageProvider } from './damage/Damage';
 import type { HullVolume } from '../domain/hullForm';
 
 interface ShipProps {
@@ -213,91 +214,101 @@ export function Ship({ blueprint, mode, protrusions, burning, onReady }: ShipPro
   });
 
   return (
-    <group ref={groupRef}>
-      <Hull
-        archetype={blueprint.architecture}
-        material={hullMaterial}
-        profile={blueprint.hullProfile}
-      />
+    /**
+     * Everything inside reads its wear from here. Damage is photoreal-only:
+     * a soot stamp on a holographic wireframe or a thermal false-colour pass
+     * is noise, not information.
+     */
+    <DamageProvider wear={wear} seed={blueprint.seed} enabled={mode === 'pbr'}>
+      <group ref={groupRef}>
+        <Hull
+          archetype={blueprint.architecture}
+          material={hullMaterial}
+          profile={blueprint.hullProfile}
+        />
 
-      {sockets.map((socket) => {
-        switch (socket.kind) {
-          case 'engine':
-            return (
-              <SocketMount key={socket.id} socket={socket}>
-                <EngineBell sublight={blueprint.sublight} burning={burning} dead={dead} />
-                {/* Starts at the bell's mouth, which now depends on the drive
-                    fitted rather than on a constant that suited one of them. */}
-                <group position={[0, engineBellLength(blueprint.sublight), 0]}>
-                  <ExhaustPlume
-                    burning={burning}
-                    color={blueprint.accentColor}
+        {sockets.map((socket) => {
+          switch (socket.kind) {
+            case 'engine':
+              return (
+                <SocketMount key={socket.id} socket={socket}>
+                  <EngineBell sublight={blueprint.sublight} burning={burning} dead={dead} />
+                  {/* Starts at the bell's mouth, which now depends on the drive
+                      fitted rather than on a constant that suited one of them. */}
+                  <group position={[0, engineBellLength(blueprint.sublight), 0]}>
+                    <ExhaustPlume
+                      burning={burning}
+                      color={blueprint.accentColor}
+                      dead={dead}
+                    />
+                  </group>
+                </SocketMount>
+              );
+
+            case 'radiator':
+              return protrusions.radiators ? (
+                <SocketMount key={socket.id} socket={socket}>
+                  <Radiator burning={burning} thermalWear={wear.thermal} mode={mode} dead={dead} />
+                </SocketMount>
+              ) : null;
+
+            case 'sensor':
+              return protrusions.sensors ? (
+                <SocketMount key={socket.id} socket={socket}>
+                  <SensorArray sensor={blueprint.sensors} mode={mode} dead={dead} />
+                </SocketMount>
+              ) : null;
+
+            case 'rcs':
+              return protrusions.rcs ? (
+                <SocketMount key={socket.id} socket={socket}>
+                  <RcsQuad />
+                </SocketMount>
+              ) : null;
+
+            case 'weapon':
+              return (
+                <SocketMount key={socket.id} socket={socket}>
+                  <Turret weapon={blueprint.weapons} mode={mode} dead={dead} />
+                </SocketMount>
+              );
+
+            case 'fuel':
+              return (
+                <SocketMount key={socket.id} socket={socket}>
+                  <FuelPod fuel={blueprint.fuel} mode={mode} dead={dead} />
+                </SocketMount>
+              );
+
+            case 'ftl':
+              // Deliberately not socket-mounted: the ring encircles the whole
+              // hull rather than protruding from a face, so it takes the socket's
+              // position but none of its orientation.
+              return (
+                <group key={socket.id} position={socket.position as unknown as [number, number, number]}>
+                  <FtlCore
+                    ftl={blueprint.ftl}
+                    mode={mode}
                     dead={dead}
+                    ringRadius={archetype.ringRadius}
+                    pylonReach={ftlPylonReach(volumes, socket.position[2], archetype.ringRadius * 0.5)}
+                    // The hyperspace shunt is a surface fitting, so it needs the
+                    // dorsal skin at its own station rather than the ring radius.
+                    dorsalReach={hullReach(volumes, [0, 0, socket.position[2]], [0, 1, 0]) ?? undefined}
                   />
                 </group>
-              </SocketMount>
-            );
+              );
+          }
+        })}
 
-          case 'radiator':
-            return protrusions.radiators ? (
-              <SocketMount key={socket.id} socket={socket}>
-                <Radiator burning={burning} thermalWear={wear.thermal} mode={mode} dead={dead} />
-              </SocketMount>
-            ) : null;
-
-          case 'sensor':
-            return protrusions.sensors ? (
-              <SocketMount key={socket.id} socket={socket}>
-                <SensorArray sensor={blueprint.sensors} mode={mode} dead={dead} />
-              </SocketMount>
-            ) : null;
-
-          case 'rcs':
-            return protrusions.rcs ? (
-              <SocketMount key={socket.id} socket={socket}>
-                <RcsQuad />
-              </SocketMount>
-            ) : null;
-
-          case 'weapon':
-            return (
-              <SocketMount key={socket.id} socket={socket}>
-                <Turret weapon={blueprint.weapons} mode={mode} dead={dead} />
-              </SocketMount>
-            );
-
-          case 'fuel':
-            return (
-              <SocketMount key={socket.id} socket={socket}>
-                <FuelPod fuel={blueprint.fuel} mode={mode} dead={dead} />
-              </SocketMount>
-            );
-
-          case 'ftl':
-            // Deliberately not socket-mounted: the ring encircles the whole
-            // hull rather than protruding from a face, so it takes the socket's
-            // position but none of its orientation.
-            return (
-              <group key={socket.id} position={socket.position as unknown as [number, number, number]}>
-                <FtlCore
-                  ftl={blueprint.ftl}
-                  mode={mode}
-                  dead={dead}
-                  ringRadius={archetype.ringRadius}
-                  pylonReach={ftlPylonReach(volumes, socket.position[2], archetype.ringRadius * 0.5)}
-                />
-              </group>
-            );
-        }
-      })}
-
-      <RunningLights
-        volumes={volumes}
-        seed={blueprint.seed}
-        accentColor={blueprint.accentColor}
-        dead={dead}
-        mode={mode}
-      />
-    </group>
+        <RunningLights
+          volumes={volumes}
+          seed={blueprint.seed}
+          accentColor={blueprint.accentColor}
+          dead={dead}
+          mode={mode}
+        />
+      </group>
+    </DamageProvider>
   );
 }

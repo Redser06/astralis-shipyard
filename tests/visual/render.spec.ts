@@ -150,6 +150,30 @@ test('RC-5: every weapon produces different geometry', async ({ page }) => {
   }
 });
 
+test('R2: each kinetic weapon added to the registry renders its own geometry', async ({
+  page,
+}) => {
+  // The registry's whole claim is that a component is a data change. These
+  // three exist only as entries in `domain/components.ts` and
+  // `domain/fittings.ts` — no renderer knows their names. If a recipe kind
+  // silently drew nothing, two of them would look identical here.
+  const weapons = ['Rotary Autocannon Pod', 'Quad Coilgun Battery', 'Mk-VII Heavy Rail Lance'];
+
+  const signatures: string[] = [];
+  for (const weapon of weapons) {
+    await page.getByRole('button', { name: new RegExp(weapon) }).click();
+    await page.waitForTimeout(800);
+    signatures.push(await signature(page));
+  }
+
+  for (let i = 1; i < signatures.length; i++) {
+    expect(
+      difference(signatures[i - 1]!, signatures[i]!),
+      `${weapons[i - 1]} and ${weapons[i]} render identically`,
+    ).toBeGreaterThan(0.01);
+  }
+});
+
 test('RC-5: fuel choice changes the silhouette', async ({ page }) => {
   await page.getByRole('button', { name: /Cryogenic Liquid H2 Bulk Tanks/ }).click();
   await page.waitForTimeout(800);

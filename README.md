@@ -166,7 +166,13 @@ Written from observed behaviour, per [`docs/AGENT_PLAYBOOK.md`](docs/AGENT_PLAYB
 - Three environments: orbital drydock with gantry and welding sparks, ion nebula,
   asteroid belt
 - Auto-rotate, rotation speed, light intensity, and the radiator / sensor / RCS toggles
-- Test Burn visibly lengthens the plume and brightens the radiators
+- **Exhaust that belongs to the drive fitted** (`src/domain/plume.ts`) — a thin,
+  steady cyan ion stream, a violet MPD plasma column, or a fusion torch with
+  standing shock diamonds, each built from nested additive shells so it reads as
+  volume rather than as a sprite, and each throwing a real light that puts the
+  drive's own colour on the hull behind it. Test Burn scales the column, the
+  sparks, the shock structure and that light together, and brightens the
+  radiators; a derelict's drives are cold, dark and unlit
 - **Real `.glb` export** via `GLTFExporter`
 - **Ship Architect** — model-backed when a key is configured, deterministic rule
   engine otherwise, always labelled with which answered
@@ -245,6 +251,7 @@ astralis-shipyard/
 │   │   ├── condition.ts       The wear system  (+ condition.test.ts)
 │   │   ├── fittings.ts        Component registry — shapes as data  (+ test)
 │   │   ├── damage.ts          Where wear puts its marks  (+ damage.test.ts)
+│   │   ├── plume.ts           Exhaust shape per drive tier  (+ plume.test.ts)
 │   │   ├── windows.ts         Glazing rules and exclusions  (+ windows.test.ts)
 │   │   ├── exteriorLights.ts  Floodlight and nav-light rig  (+ test)
 │   │   ├── rng.ts             Seeded PRNG  (+ rng.test.ts)

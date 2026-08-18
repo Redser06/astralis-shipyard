@@ -254,17 +254,25 @@ export function Radiator({
 
 /* --------------------------- Engines --------------------------- */
 
+/** How far the glowing cavity is recessed into the bell, as a fraction of it. */
+const THROAT_DEPTH = 0.34;
+
 export function EngineBell({
   sublight,
   burning,
   dead,
+  reducedMotion,
 }: {
   sublight: SublightId;
   burning: boolean;
   dead: boolean;
+  /** Holds the throat's pulse still. See `ExhaustPlume` for the reasoning. */
+  reducedMotion: boolean;
 }) {
   const profile = ENGINE_PROFILE[sublight];
+  const throatDepth = profile.length * THROAT_DEPTH;
   const coreRef = useRef<Mesh>(null);
+  const throatRef = useRef<Mesh>(null);
 
   // Matches the housing's own cylinderGeometry, so the scorching lands on the
   // bell that is actually fitted rather than on the tier-2 one it was tuned to.
@@ -279,17 +287,23 @@ export function EngineBell({
   );
 
   useFrame((state) => {
-    const mesh = coreRef.current;
-    if (!mesh) return;
-    const material = mesh.material as MeshStandardMaterial;
-    if (dead) {
-      material.emissiveIntensity = 0;
-      return;
-    }
+    const cavity = coreRef.current;
+    const throat = throatRef.current;
+    if (!cavity || !throat) return;
+
+    // TONE MAPPED, and nowhere near an intensity of 6. The throat used to run
+    // `toneMapped={false}` at 6.0, which clips every channel to 1 before the
+    // composer sees it: a cyan ion throat and an amber fusion throat both came
+    // out flat white, and the bloom pass then smeared that white over the
+    // engine deck. Through ACES at these intensities the drive keeps its hue
+    // and still reads as the brightest thing on the ship.
     const t = state.clock.elapsedTime;
-    material.emissiveIntensity = burning
-      ? 6.0 + Math.sin(t * 22) * 1.2
-      : 1.8 + Math.sin(t * 3) * 0.25;
+    const pulse = reducedMotion ? 0 : Math.sin(t * (burning ? 19 : 3));
+    const glow = dead ? 0 : burning ? 3.1 + pulse * 0.45 : 1.15 + pulse * 0.15;
+
+    (cavity.material as MeshStandardMaterial).emissiveIntensity = glow;
+    // The throat proper sits deepest and runs hotter than the walls around it.
+    (throat.material as MeshStandardMaterial).emissiveIntensity = glow * 1.5;
   });
 
   return (
@@ -304,21 +318,40 @@ export function EngineBell({
         <SurfaceDamage surface={housing} tag={`engine-${sublight}`} options={ENGINE_DAMAGE} />
       </mesh>
 
-      {/* Nozzle throat, capping the mouth. Two things were wrong with it: with
-          no rotation the disc stood on edge and sliced through the bell instead
-          of closing it, and sitting inside a capped cylinder it could not be
-          seen from any angle at all. */}
-      <mesh
-        ref={coreRef}
-        position={[0, profile.length + 0.02, 0]}
-        rotation={[-Math.PI / 2, 0, 0]}
-      >
-        <circleGeometry args={[profile.radius * 0.92, 16]} />
+      {/* Nozzle throat: a RECESSED CAVITY, not a disc.
+          It was a zero-thickness `circleGeometry` across the mouth, so from any
+          angle but dead astern the whole engine glow degenerated to a razor-thin
+          sliver — the brightest fitting on the ship, invisible from the hero
+          camera. A cone standing inside the bell mouth is lit from every angle
+          that can see into the bell at all, and it gives the drive somewhere to
+          glow FROM: the throat behind it is what the plume appears to leave. */}
+      <mesh ref={coreRef} position={[0, profile.length - throatDepth / 2, 0]}>
+        <cylinderGeometry
+          args={[profile.radius * 0.9, profile.radius * 0.36, throatDepth, 18, 1, true]}
+        />
         <meshStandardMaterial
           color="#000000"
           emissive={profile.glow}
-          emissiveIntensity={dead ? 0 : 1.8}
-          toneMapped={false}
+          emissiveIntensity={dead ? 0 : 1.15}
+          roughness={0.6}
+          metalness={0}
+          side={2}
+        />
+      </mesh>
+
+      {/* The throat itself, closing the bottom of the cavity. */}
+      <mesh
+        ref={throatRef}
+        position={[0, profile.length - throatDepth, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <circleGeometry args={[profile.radius * 0.36, 16]} />
+        <meshStandardMaterial
+          color="#000000"
+          emissive={profile.glow}
+          emissiveIntensity={dead ? 0 : 1.7}
+          roughness={0.6}
+          metalness={0}
           side={2}
         />
       </mesh>

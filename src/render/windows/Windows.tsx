@@ -1,12 +1,11 @@
 import { useMemo } from 'react';
 import { AdditiveBlending, DoubleSide, Matrix4, Quaternion, Vector3 } from 'three';
-import type { ArchetypeId, Socket, Vec3, WearChannels } from '../../domain/types';
-import type { HullVolume } from '../../domain/hullForm';
+import type { Vec3, WearChannels } from '../../domain/types';
 import {
   glazeWindows,
-  placeWindows,
   type GlazedWindow,
   type GlazingState,
+  type WindowPlacement,
 } from '../../domain/windows';
 import type { RenderMode } from '../materials/renderModes';
 
@@ -34,9 +33,16 @@ import type { RenderMode } from '../materials/renderModes';
  */
 
 interface WindowsProps {
-  archetype: ArchetypeId;
-  volumes: readonly HullVolume[];
-  sockets: readonly Socket[];
+  /**
+   * Where the glazing goes, resolved upstream in `Ship`.
+   *
+   * Placed there rather than derived here, for the same reason the exterior
+   * lighting rig is: the marker lamps have to keep clear of the glass, so two
+   * subsystems need these positions. Deriving them in both places would mean
+   * two ray-cast passes over the hull and, worse, two answers that agree only
+   * by construction.
+   */
+  placements: readonly WindowPlacement[];
   seed: number;
   wear: WearChannels;
   condition: number;
@@ -274,20 +280,7 @@ function FlightDeck({ window: deck, mode }: { window: GlazedWindow; mode: Render
 
 /* --------------------------- The set --------------------------- */
 
-export function ShipWindows({
-  archetype,
-  volumes,
-  sockets,
-  seed,
-  wear,
-  condition,
-  mode,
-}: WindowsProps) {
-  const placements = useMemo(
-    () => placeWindows(archetype, volumes, sockets, seed),
-    [archetype, volumes, sockets, seed],
-  );
-
+export function ShipWindows({ placements, seed, wear, condition, mode }: WindowsProps) {
   const glazed = useMemo(
     () => glazeWindows(placements, wear, condition, seed),
     [placements, wear, condition, seed],

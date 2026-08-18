@@ -698,7 +698,7 @@ export function raycastHull(
 }
 
 /* ------------------------------------------------------------------ */
-/* Socket resolution                                                   */
+/* Seating fixtures on the skin                                        */
 /* ------------------------------------------------------------------ */
 
 /** Far enough to start outside any hull; the longest is 20 units nose to tail. */
@@ -709,6 +709,88 @@ const REACH = 60;
  * one. A grazing hit on a tail fin should not tip a radiator on its side.
  */
 const NORMAL_AGREEMENT = 0.5;
+
+/** A point measured onto the hull skin, carrying the plate's own normal. */
+export interface SeatedPoint {
+  position: Vec3;
+  normal: Vec3;
+}
+
+/**
+ * Seat a declared point on the outermost skin along its own normal.
+ *
+ * THE ONE COPY. Sockets, floodlights, navigation beacons and glazing all need
+ * exactly this — cast inward from well outside, so the first hit is the outer
+ * skin rather than whatever internal face happens to lie nearest the authored
+ * point — and each subsystem had grown its own private `seat()` doing it.
+ * `domain/windows.ts` and `domain/exteriorLights.ts` carried byte-identical
+ * bodies. Three copies is three places for the reach, the cast direction or the
+ * normal-agreement rule to drift apart, and a fixture seated by a slightly
+ * different rule from its neighbours is exactly the class of defect the
+ * connectivity work exists to prevent.
+ *
+ * `minFacing` is the one behaviour that genuinely varied. Pass it and a
+ * measured normal is accepted only where it broadly agrees with the declared
+ * one, falling back to the declared direction on a grazing hit; omit it and the
+ * plate's own normal is always taken.
+ */
+export function seatOnHull(
+  volumes: readonly HullVolume[],
+  position: Vec3,
+  normal: Vec3,
+  minFacing?: number,
+): SeatedPoint | null {
+  const unit = normalise(normal);
+  const hit = raycastHull(volumes, add(position, scale(unit, REACH)), scale(unit, -1));
+  if (!hit) return null;
+  const agrees = minFacing === undefined || dot(hit.normal, unit) > minFacing;
+  return { position: hit.point, normal: agrees ? hit.normal : unit };
+}
+
+/* ------------------------------------------------------------------ */
+/* Keep-outs                                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A patch of hull skin some other subsystem has already claimed.
+ *
+ * WHY THIS IS SHARED, AND WHY IT IS HERE. Four populations bolt fixtures to the
+ * same plate — sockets, the exterior lighting rig, glazing, and the scattered
+ * marker lamps — and each was seated against the hull without reference to the
+ * others. Negotiation existed for exactly one pair, lamps against beacons, and
+ * nowhere else, so on every archetype a floodlight housing hung over a porthole
+ * and marker lamps sat in the middle of the glass. Stating the keep-out once
+ * means every subsystem yields by the same arithmetic, and means a test can
+ * check the result from outside the function that produced it.
+ *
+ * `radius` is the entire clearance demanded of a newcomer's centre, not the
+ * obstacle's own half-width. The producer knows both its size and what it will
+ * tolerate beside it, so it does that sum once, where the knowledge is.
+ */
+export interface Keepout {
+  position: Vec3;
+  radius: number;
+}
+
+/** Whether `point` intrudes on any keep-out, allowing `margin` of its own. */
+export function isCrowded(
+  point: Vec3,
+  keepClear: readonly Keepout[],
+  margin = 0,
+): boolean {
+  for (const zone of keepClear) {
+    const dx = point[0] - zone.position[0];
+    const dy = point[1] - zone.position[1];
+    const dz = point[2] - zone.position[2];
+    const reach = zone.radius + margin;
+    if (dx * dx + dy * dy + dz * dz < reach * reach) return true;
+  }
+  return false;
+}
+
+/* ------------------------------------------------------------------ */
+/* Socket resolution                                                   */
+/* ------------------------------------------------------------------ */
 
 /**
  * Snap a socket onto the outermost hull surface along its own normal.
@@ -722,20 +804,17 @@ export function resolveSocket(socket: Socket, volumes: readonly HullVolume[]): S
   // through the ship.
   if (socket.kind === 'ftl') return socket;
 
-  const normal = normalise(socket.normal);
-  // Cast inward from well outside, so the first hit is the outer skin rather
-  // than whatever internal face happens to be nearest the authored point.
-  const origin = add(socket.position, scale(normal, REACH));
-  const hit = raycastHull(volumes, origin, scale(normal, -1));
-  if (!hit) return socket;
+  const seated = seatOnHull(volumes, socket.position, socket.normal, NORMAL_AGREEMENT);
+  if (!seated) return socket;
 
-  const agrees = dot(hit.normal, normal) > NORMAL_AGREEMENT;
   return {
     ...socket,
-    position: hit.point,
+    position: seated.position,
     // Following the real surface is what makes a turret sit flush on a canted
-    // chine instead of meeting it as a wedge.
-    normal: agrees ? hit.normal : socket.normal,
+    // chine instead of meeting it as a wedge. On a grazing hit this is the
+    // declared normal, normalised — `SocketMount` is the only consumer and
+    // normalises it anyway.
+    normal: seated.normal,
   };
 }
 
@@ -793,6 +872,15 @@ export interface LampAnchor {
   normal: Vec3;
 }
 
+/**
+ * How big a marker lamp is. `Ship.tsx` draws its sphere at this radius.
+ *
+ * Declared here rather than at the mesh so the clearance arithmetic and the
+ * geometry cannot drift apart: a lamp that dodges an obstacle by less than its
+ * own body still renders inside it.
+ */
+export const LAMP_RADIUS = 0.045;
+
 export function hullBounds(volumes: readonly HullVolume[]): { minZ: number; maxZ: number } {
   let minZ = Infinity;
   let maxZ = -Infinity;
@@ -819,20 +907,21 @@ export interface LampAnchorOptions {
   count?: number;
   standoff?: number;
   /**
-   * Points this population must not sit on top of.
+   * Hull the other subsystems have already claimed.
    *
-   * These lamps are scattered by seed, and other subsystems bolt their own
-   * fixtures to the same skin — most importantly the navigation beacons in
-   * `exteriorLights.ts`, which are derived from the hull's own extremities and
-   * so cannot move out of the way. Placed independently, the two eventually
-   * collide: on `industrial_expanse` the nearest pair came out 0.060 apart,
-   * well inside the beacon's 0.135 base radius, so a marker lamp rendered
-   * buried in another fixture. The scattered population is the one that can
-   * afford to give way, so it is the one that does.
+   * These lamps are scattered by seed, and three other populations bolt
+   * fixtures to the same skin: the navigation beacons and floodlights of
+   * `exteriorLights.ts`, both derived or declared from the hull's own form and
+   * so unable to move, and the glazing of `windows.ts`. Placed independently
+   * they collide — on `industrial_expanse` a lamp and a beacon came out 0.060
+   * apart, well inside the beacon's own base, and on every archetype some lamp
+   * ended up stuck to the middle of a porthole. The scattered population is the
+   * one that can afford to give way, so it is the one that does.
+   *
+   * Each zone carries its own radius, because a 0.46-wide floodlight housing
+   * and a 0.135 beacon do not want the same berth.
    */
-  keepClear?: readonly Vec3[];
-  /** How much room to leave around each `keepClear` point. */
-  clearance?: number;
+  keepClear?: readonly Keepout[];
 }
 
 /**
@@ -853,16 +942,18 @@ export function runningLightAnchors(
   seed: number,
   options: LampAnchorOptions = {},
 ): LampAnchor[] {
-  const { count = 14, standoff = 0.05, keepClear = [], clearance = 0.28 } = options;
+  const { count = 14, standoff = 0.05, keepClear = [] } = options;
   const rng = streamFor(seed, 'lamps');
   const { minZ, maxZ } = hullBounds(volumes);
   const span = maxZ - minZ;
   const anchors: LampAnchor[] = [];
-  const clearanceSq = clearance * clearance;
 
   // Walk the hull nose to tail, alternating flanks, with a few dorsal lamps.
   // The budget is three candidates per lamp, so a rejected position re-rolls at
-  // the same station rather than costing the ship a light.
+  // the same station rather than costing the ship a light. It still clears all
+  // fourteen on every archetype now that the floodlights and the glazing have
+  // joined the beacons in the exclusion list — measured, not assumed, and a
+  // test in `hullForm.test.ts` holds the count at fourteen.
   for (let i = 0; i < count * 3 && anchors.length < count; i++) {
     const step = anchors.length;
     const z = minZ + span * ((step + 0.5) / count) + (rng() - 0.5) * (span / count) * 0.6;
@@ -877,13 +968,7 @@ export function runningLightAnchors(
     if (!hit) continue;
 
     const position = add(hit.point, scale(hit.normal, standoff));
-    const crowded = keepClear.some((point) => {
-      const dx = position[0] - point[0];
-      const dy = position[1] - point[1];
-      const dz = position[2] - point[2];
-      return dx * dx + dy * dy + dz * dz < clearanceSq;
-    });
-    if (crowded) continue;
+    if (isCrowded(position, keepClear, LAMP_RADIUS)) continue;
 
     anchors.push({ position, normal: hit.normal });
   }

@@ -192,17 +192,20 @@ describe('running lights', () => {
     for (const archetype of ARCHETYPES) {
       const volumes = hullVolumes(archetype);
       const rig = exteriorLightRig(archetype, volumes, 4242);
-      const keepClear = rig.beacons.map((beacon) => beacon.position);
       const clearance = 0.28;
+      const keepClear = rig.beacons.map((beacon) => ({
+        position: beacon.position,
+        radius: clearance,
+      }));
 
-      const anchors = runningLightAnchors(volumes, 4242, { keepClear, clearance });
+      const anchors = runningLightAnchors(volumes, 4242, { keepClear });
 
       for (const anchor of anchors) {
-        for (const point of keepClear) {
+        for (const { position } of keepClear) {
           const gap = Math.hypot(
-            anchor.position[0] - point[0],
-            anchor.position[1] - point[1],
-            anchor.position[2] - point[2],
+            anchor.position[0] - position[0],
+            anchor.position[1] - position[1],
+            anchor.position[2] - position[2],
           );
           expect(gap, `${archetype} marker lamp is inside a beacon`).toBeGreaterThanOrEqual(
             clearance,
@@ -210,8 +213,8 @@ describe('running lights', () => {
         }
       }
 
-      // Rejection re-rolls rather than costing the ship a lamp: the budget is
-      // three candidates per station, and a handful of exclusion spheres on a
+      // Rejection re-rolls rather than costing the ship a lamp: the candidate
+      // budget per station is generous, and a handful of exclusion spheres on a
       // hull this size never exhausts it.
       expect(anchors.length, `${archetype} lost lamps to the exclusion`).toBe(14);
     }

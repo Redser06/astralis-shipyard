@@ -110,6 +110,19 @@ interface PlumeShell {
  * point, rather than a triangle.
  */
 const SHELLS: readonly PlumeShell[] = [
+  // A wake that reaches past the column and closes to nothing.
+  //
+  // The shells below are open-ended cones at uniform opacity, and uniform
+  // opacity does not fade — it stops. However finely a cone tapers, its far rim
+  // is still a hard edge, which read as a solid tube cut off square rather than
+  // as exhaust dissipating. Tightening the taper is not the fix either: the
+  // per-tier `taper` values are load-bearing identity (the MPD is deliberately
+  // a broad column, the torch a spike) and plume.test.ts asserts exactly that.
+  //
+  // So this shell adds the dissipation instead of taking away the shape: it
+  // starts narrower than the envelope, runs half again as long, and converges,
+  // so the compound silhouette trails off instead of ending.
+  { id: 'wake', base: 'envelope', bottom: 0.62, top: 0.02, length: 1.5, opacity: 0.03, tint: 'mantle', bothSides: false },
   { id: 'bloom', base: 'envelope', bottom: 1.18, top: 0.5, length: 0.34, opacity: 0.085, tint: 'mantle', bothSides: false },
   { id: 'envelope', base: 'envelope', bottom: 1, length: 1, opacity: 0.085, tint: 'mantle', bothSides: false },
   { id: 'outer', base: 'core', bottom: 1, length: 1, opacity: 0.2, tint: 'mantle', bothSides: false },

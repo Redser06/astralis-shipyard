@@ -328,3 +328,58 @@ test('Ship Architect returns a labelled proposal and applies it', async ({ page 
     'the proposal must actually be applied to the ship',
   ).toBeGreaterThan(0.01);
 });
+
+/* --------------------------------------------------------------------------
+ * The four subsystems, composed, on every hull.
+ * ------------------------------------------------------------------------ */
+
+const ARCHETYPE_NAMES = [
+  'Angular Stealth Frigate',
+  'Industrial Heavy Modular',
+  'Brutalist Battlecruiser',
+  'Outrigger Long-Range Science',
+  'Aerodynamic Hybrid Cruiser',
+] as const;
+
+/**
+ * Connectivity mounts, bolt-on components, glazing and lighting, and the drive
+ * plume — all five hulls, one page load, clean console.
+ *
+ * WHY BY NAME. `RC-4` switches to the Brutalist hull only, on the reasoning
+ * that it is the widest and so the worst case for hardware intersecting the
+ * plate. That was true of the defect it was written for. It is not true of the
+ * four subsystems that landed since: the glazing rules bind hardest on the slim
+ * Outrigger fuselage, the lighting rig's mounts are authored per archetype, and
+ * a hull whose sockets resolve to a different face is the one that will produce
+ * the NaN. Four of the five hulls were therefore never rendered by the suite at
+ * all.
+ *
+ * The console assertion is doing more work than it looks. Three reports a
+ * degenerate attribute through `computeBoundingSphere(): Computed radius is
+ * NaN`, and R3F surfaces a reconciler failure as an uncaught exception, so a
+ * clean console across all five hulls IS the no-NaN, no-exception check — and
+ * it is checked with Test Burn lit, because the plume is the one subsystem
+ * whose geometry only reaches full extent under throttle.
+ */
+test('every archetype composes all four subsystems cleanly', async ({ page }) => {
+  const problems: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') problems.push(`console: ${message.text()}`);
+  });
+  page.on('pageerror', (error) => problems.push(`exception: ${error.message}`));
+
+  // Under throttle, so the plume is at full extent rather than at idle.
+  await page.getByRole('button', { name: /Test Burn/ }).click();
+
+  for (const name of ARCHETYPE_NAMES) {
+    await page.getByRole('button', { name: new RegExp(name) }).click();
+    await page.waitForTimeout(1200);
+
+    // The ship is actually on screen, not a blank frame that trivially has no
+    // console errors in it.
+    const centre = await luminance(page, { x: 420, y: 260, w: 420, h: 280 });
+    expect(centre.max, `${name} rendered nothing`).toBeGreaterThan(60);
+  }
+
+  expect(problems, `while composing hulls: ${problems.join(' | ')}`).toHaveLength(0);
+});

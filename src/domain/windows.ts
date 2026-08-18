@@ -1,7 +1,15 @@
 import { streamFor } from './rng';
 import { DERELICT_THRESHOLD } from './condition';
 import { surfaceArea, surfaceForSolid } from './damage';
-import { hullBounds, normalise, raycastHull, type HullVolume } from './hullForm';
+import {
+  hullBounds,
+  isCrowded,
+  normalise,
+  raycastHull,
+  seatOnHull,
+  type HullVolume,
+  type Keepout,
+} from './hullForm';
 import type { ArchetypeId, Socket, SocketKind, SocketSize, Vec3, WearChannels } from './types';
 
 /**
@@ -225,8 +233,14 @@ export const FLIGHT_DECKS: Readonly<Record<ArchetypeId, FlightDeckIntent>> = {
 /* ------------------------------------------------------------------ */
 
 const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const scale = (a: Vec3, k: number): Vec3 => [a[0] * k, a[1] * k, a[2] * k];
 const dot = (a: Vec3, b: Vec3): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a: Vec3, b: Vec3): Vec3 => [
+  a[1] * b[2] - a[2] * b[1],
+  a[2] * b[0] - a[0] * b[2],
+  a[0] * b[1] - a[1] * b[0],
+];
 
 export const distance = (a: Vec3, b: Vec3): number =>
   Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
@@ -275,6 +289,44 @@ export const apertureReach = (window: WindowPlacement): number =>
   window.class === 'porthole' ? window.extent[0] : Math.hypot(window.extent[0], window.extent[1]);
 
 /**
+ * How far a point lies from the aperture itself, rather than from a circle
+ * drawn round it.
+ *
+ * `apertureReach` circumscribes a band, which is right against sockets — they
+ * are large and metres away, so the conservative answer costs nothing — and
+ * badly wrong against a fixture bolted half a metre off. The industrial hull's
+ * flight deck is 2.24 across and 0.56 tall: its half-diagonal is 1.15, so a
+ * circular test reserves an area four times the glass and reports a beacon
+ * 0.85 away as fouling a band whose top edge it clears by a third of a metre.
+ * Applied as an exclusion, that measure deleted the bridge outright from three
+ * of the five archetypes.
+ *
+ * So a band is measured as the rectangle it is: project onto the aperture's own
+ * axes, clamp to the extents, and take what is left. A porthole is round, and
+ * this reduces to its centre distance less its radius, which is exactly what
+ * the circular measure already said.
+ */
+export function apertureClearance(window: WindowPlacement, point: Vec3): number {
+  if (window.class === 'porthole') {
+    return Math.max(0, distance(window.position, point) - window.extent[0]);
+  }
+
+  const forward = normalise(window.normal);
+  // The same basis the renderer builds in `apertureQuaternion`, so the maths
+  // here describes the rectangle that is actually drawn.
+  let vertical = sub(window.up, scale(forward, dot(window.up, forward)));
+  if (dot(vertical, vertical) < 1e-8) vertical = [0, 1, 0];
+  vertical = normalise(vertical);
+  const right = cross(vertical, forward);
+
+  const offset = sub(point, window.position);
+  const dx = Math.max(0, Math.abs(dot(offset, right)) - window.extent[0]);
+  const dy = Math.max(0, Math.abs(dot(offset, vertical)) - window.extent[1]);
+  const dz = dot(offset, forward);
+  return Math.hypot(dx, dy, dz);
+}
+
+/**
  * Roll reference for an aperture on a given surface.
  *
  * Level with the ship's waterline wherever that is meaningful, and aligned fore
@@ -307,26 +359,21 @@ function testExclusions(
   return { blocked: false, blast };
 }
 
-/** Seat a point on the outermost skin along its own normal, as sockets are. */
-function seat(
-  volumes: readonly HullVolume[],
-  position: Vec3,
-  normal: Vec3,
-): { position: Vec3; normal: Vec3 } | null {
-  const unit = normalise(normal);
-  const hit = raycastHull(volumes, add(position, scale(unit, REACH)), scale(unit, -1));
-  if (!hit) return null;
-  return {
-    position: hit.point,
-    // Follow the plate. A canted chine gets canted glazing, which is the whole
-    // reason the normal is measured rather than declared.
-    normal: dot(hit.normal, unit) > FACING ? hit.normal : unit,
-  };
-}
 
 export interface PlacementOptions {
   /** Override the structural ceiling. Tests use it; nothing else should. */
   maxGlazedFraction?: number;
+  /**
+   * Hull already claimed by fixtures that cannot move.
+   *
+   * Rules 1–3 keep glazing away from the *sockets* — the fuel bays, the drives,
+   * the weapon mounts. They say nothing about the exterior lighting rig, which
+   * is bolted to the same plate by a different module, so a porthole would
+   * happily open directly under a floodlight's hood. It did, on every
+   * archetype. Glazing has candidates to spare and the rig has nowhere else to
+   * go, so glazing is what gives way. See `exteriorLights.rigKeepouts`.
+   */
+  keepClear?: readonly Keepout[];
 }
 
 /**
@@ -345,12 +392,14 @@ export function placeWindows(
 ): WindowPlacement[] {
   const rng = streamFor(seed, 'windows');
   const budget = hullSkinArea(volumes) * (options.maxGlazedFraction ?? MAX_GLAZED_FRACTION);
+  const keepClear = options.keepClear ?? [];
   const placed: WindowPlacement[] = [];
   let spent = 0;
 
   const fits = (candidate: WindowPlacement): boolean => {
     if (spent + candidate.area > budget) return false;
     const reach = apertureReach(candidate);
+    if (isCrowded(candidate.position, keepClear, reach)) return false;
     for (const other of placed) {
       if (distance(candidate.position, other.position) < reach + apertureReach(other) + MIN_APERTURE_GAP) {
         return false;
@@ -367,24 +416,32 @@ export function placeWindows(
   /* --- The flight deck, first, so it always gets its area --- */
 
   const deck = FLIGHT_DECKS[archetype];
-  const seated = seat(volumes, deck.position, deck.normal);
+  const seated = seatOnHull(volumes, deck.position, deck.normal, FACING);
   if (seated) {
     // The bridge is the widest aperture on the ship, so it is measured against
-    // the exclusions at its own half-diagonal rather than at a porthole's.
+    // the socket exclusions at its own half-diagonal rather than at a
+    // porthole's. Sockets are large and metres off, so circumscribing the band
+    // costs nothing there.
     const reach = Math.hypot(deck.extent[0], deck.extent[1]);
     const { blocked } = testExclusions(seated.position, reach, sockets);
-    if (!blocked) {
-      accept({
-        id: 'flight-deck',
-        class: 'flight_deck',
-        position: seated.position,
-        normal: seated.normal,
-        up: deck.up,
-        extent: deck.extent,
-        panes: deck.panes,
-        area: apertureArea(deck.extent, deck.panes),
-      });
-    }
+    const candidate: WindowPlacement = {
+      id: 'flight-deck',
+      class: 'flight_deck',
+      position: seated.position,
+      normal: seated.normal,
+      up: deck.up,
+      extent: deck.extent,
+      panes: deck.panes,
+      area: apertureArea(deck.extent, deck.panes),
+    };
+    // Against the exterior fixtures it is measured as the rectangle it is. Those
+    // sit half a metre away, where circumscribing the band is not conservative
+    // but simply wrong — it reserves four times the glass, and using it here
+    // deleted the bridge outright from three of the five archetypes.
+    const fouled = keepClear.some(
+      (zone) => apertureClearance(candidate, zone.position) < zone.radius,
+    );
+    if (!blocked && !fouled) accept(candidate);
   }
 
   /* --- Portholes: walk the hull bow to stern, trying each bearing --- */
@@ -453,6 +510,7 @@ export function windowIssues(
   sockets: readonly Socket[],
   hullArea: number,
   maxGlazedFraction = MAX_GLAZED_FRACTION,
+  keepClear: readonly Keepout[] = [],
 ): string[] {
   const problems: string[] = [];
 
@@ -464,6 +522,20 @@ export function windowIssues(
       if (gap < keepOut) {
         problems.push(
           `${window.id}: ${gap.toFixed(2)} from ${socket.kind} socket ${socket.id}, needs ${keepOut.toFixed(2)}`,
+        );
+      }
+    }
+    // The same check for the fixtures that are not sockets — the floodlights
+    // and beacons of `exteriorLights.ts`. Checkable from outside for the same
+    // reason the socket rule is: a constraint enforced only inside the function
+    // that produces the data is a constraint nobody else can verify. Measured
+    // off the aperture rather than off a circle round it, so that the validator
+    // and `placeWindows` agree about what fouling means.
+    for (const zone of keepClear) {
+      const gap = apertureClearance(window, zone.position);
+      if (gap < zone.radius) {
+        problems.push(
+          `${window.id}: ${gap.toFixed(2)} from an exterior fixture, needs ${zone.radius.toFixed(2)}`,
         );
       }
     }

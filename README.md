@@ -162,6 +162,13 @@ Written from observed behaviour, per [`docs/AGENT_PLAYBOOK.md`](docs/AGENT_PLAYB
   real spot beams onto the hull, plus navigation lamps on the maritime convention:
   red to port, green to starboard, white forward, anti-collision strobes at the
   extremities. All of it goes out when the ship does
+- **One negotiation for the hull's surface.** Sockets, the lighting rig, the
+  glazing and the marker lamps all bolt to the same skin, so they are resolved
+  together in `render/Ship.tsx` in a fixed precedence — what cannot move first,
+  what can move last — and each yields to what is already there via one shared
+  `Keepout` in `src/domain/hullForm.ts`. Placed independently they collided, and
+  every per-module unit test stayed green while they did; `composition.test.ts`
+  is the seam test that would not have
 - Orbit camera by mouse **and touch**, five camera presets
 - Three environments: orbital drydock with gantry and welding sparks, ion nebula,
   asteroid belt
@@ -253,6 +260,7 @@ astralis-shipyard/
 │   │   ├── damage.ts          Where wear puts its marks  (+ damage.test.ts)
 │   │   ├── plume.ts           Exhaust shape per drive tier  (+ plume.test.ts)
 │   │   ├── windows.ts         Glazing rules and exclusions  (+ windows.test.ts)
+│   │   ├── composition.test.ts The four subsystems on one hull — the seam test
 │   │   ├── exteriorLights.ts  Floodlight and nav-light rig  (+ test)
 │   │   ├── rng.ts             Seeded PRNG  (+ rng.test.ts)
 │   │   └── sound.ts

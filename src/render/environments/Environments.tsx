@@ -3,6 +3,7 @@ import { Environment, Lightformer, Stars } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { AdditiveBlending, type Group, type Points } from 'three';
 import { mulberry32 } from '../../domain/rng';
+import { useReducedMotion } from '../useReducedMotion';
 import type { EnvironmentId } from '../viewportOptions';
 
 
@@ -75,9 +76,16 @@ function WeldingSparks() {
     return array;
   }, []);
 
+  const reducedMotion = useReducedMotion();
+
   useFrame((_, delta) => {
     const points = ref.current;
-    if (!points) return;
+    // Decorative, and the only non-deterministic thing in the scene: recycled
+    // sparks draw fresh Math.random() positions, so two sessions never match.
+    // Freezing them under reduced motion is both the accessibility behaviour
+    // and what lets the seed-determinism eval measure the ship rather than the
+    // weather behind it.
+    if (!points || reducedMotion) return;
     const attribute = points.geometry.getAttribute('position');
     const array = attribute.array as Float32Array;
     for (let i = 0; i < count; i++) {
@@ -112,8 +120,10 @@ function WeldingSparks() {
 
 function Drydock() {
   const gantryRef = useRef<Group>(null);
+  const reducedMotion = useReducedMotion();
 
   useFrame((state) => {
+    if (reducedMotion) return;
     if (gantryRef.current) {
       gantryRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.4) * 0.08;
     }
@@ -156,8 +166,10 @@ function Drydock() {
 
 function Nebula() {
   const cloudsRef = useRef<Group>(null);
+  const reducedMotion = useReducedMotion();
 
   useFrame((state) => {
+    if (reducedMotion) return;
     if (cloudsRef.current) {
       cloudsRef.current.rotation.z = state.clock.elapsedTime * 0.012;
     }
@@ -199,6 +211,7 @@ function Nebula() {
 
 function AsteroidField() {
   const fieldRef = useRef<Group>(null);
+  const reducedMotion = useReducedMotion();
 
   const rocks = useMemo(() => {
     const rng = mulberry32(0xa57e01);
@@ -215,6 +228,7 @@ function AsteroidField() {
   }, []);
 
   useFrame((_, delta) => {
+    if (reducedMotion) return;
     if (fieldRef.current) fieldRef.current.rotation.y += delta * 0.008;
   });
 

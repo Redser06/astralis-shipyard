@@ -1,5 +1,12 @@
 import { streamFor } from './rng';
-import { hullBounds, normalise, raycastHull, type HullVolume } from './hullForm';
+import {
+  hullBounds,
+  normalise,
+  raycastHull,
+  seatOnHull,
+  type HullVolume,
+  type Keepout,
+} from './hullForm';
 import type { ArchetypeId, Vec3 } from './types';
 
 /**
@@ -176,19 +183,6 @@ const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const scale = (a: Vec3, k: number): Vec3 => [a[0] * k, a[1] * k, a[2] * k];
 const mirrorX = (v: Vec3): Vec3 => [-v[0], v[1], v[2]];
 
-/** Far enough to start outside any hull, matching `hullForm`'s own reach. */
-const REACH = 60;
-
-/** Seat a point on the outermost skin along its own normal, as sockets are. */
-function seat(
-  volumes: readonly HullVolume[],
-  position: Vec3,
-  normal: Vec3,
-): { position: Vec3; normal: Vec3 } | null {
-  const unit = normalise(normal);
-  const hit = raycastHull(volumes, add(position, scale(unit, REACH)), scale(unit, -1));
-  return hit ? { position: hit.point, normal: hit.normal } : null;
-}
 
 /** The beam direction of a fixture, normalised. */
 export function beamDirection(flood: Floodlight): Vec3 {
@@ -249,7 +243,7 @@ export function exteriorLightRig(
 
   const floods: Floodlight[] = [];
   for (const intent of intents) {
-    const seated = seat(volumes, intent.at, intent.normal);
+    const seated = seatOnHull(volumes, intent.at, intent.normal);
     if (!seated) continue;
     floods.push({
       id: intent.id,
@@ -283,7 +277,7 @@ export function exteriorLightRig(
 
   const beacons: NavigationBeacon[] = [];
   for (const cast of casts) {
-    const seated = seat(volumes, cast.from, cast.direction);
+    const seated = seatOnHull(volumes, cast.from, cast.direction);
     const phase = rng();
     if (!seated) continue;
     const spec = BEACON_SPEC[cast.role];
@@ -303,6 +297,47 @@ export function exteriorLightRig(
   }
 
   return { floods, beacons };
+}
+
+/* ------------------------------------------------------------------ */
+/* What the rig occupies                                               */
+/* ------------------------------------------------------------------ */
+
+/** The flared hood's radius as a multiple of `size`. Mirrors `Flood` in the renderer. */
+const HOOD_FLARE = 1.26;
+
+/**
+ * Breathing room around a fixture, beyond its own silhouette.
+ *
+ * Fixtures are mounted objects, not decals: a porthole whose rim merely touches
+ * a floodlight's hood still reads as fouled, because the hood stands 0.3 proud
+ * of the plate and shadows everything under it.
+ */
+const FIXTURE_MARGIN = 0.06;
+
+/**
+ * The hull this rig occupies, for every population placed after it.
+ *
+ * The rig goes down first and does not move: floods are declared per archetype
+ * and aimed at named parts of the ship, and beacons are derived from the hull's
+ * own extremities, so neither has anywhere else to be. Glazing and the marker
+ * lamps are generated with candidates to spare, so they are the populations
+ * that give way — but only once they are told where the rig is, which is what
+ * this is for.
+ *
+ * The radii are the fixtures' real silhouettes on the plate. A flood's widest
+ * part is the flared hood, not the lens; measuring the lens would let a
+ * porthole open under the hood's rim.
+ */
+export function rigKeepouts(rig: ExteriorLightRig): Keepout[] {
+  const zones: Keepout[] = [];
+  for (const flood of rig.floods) {
+    zones.push({ position: flood.position, radius: flood.size * HOOD_FLARE + FIXTURE_MARGIN });
+  }
+  for (const beacon of rig.beacons) {
+    zones.push({ position: beacon.position, radius: beacon.radius + FIXTURE_MARGIN });
+  }
+  return zones;
 }
 
 /* ------------------------------------------------------------------ */

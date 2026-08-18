@@ -1,12 +1,20 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import type { Group } from 'three';
-import type { Blueprint, Vec3 } from '../domain/types';
+import type { Blueprint } from '../domain/types';
 import { getMaterial } from '../domain/components';
 import { getArchetype } from '../domain/architectures';
 import { deriveWear, isDerelict } from '../domain/condition';
-import { ftlPylonReach, hullReach, hullVolumes, runningLightAnchors } from '../domain/hullForm';
-import { exteriorLightRig } from '../domain/exteriorLights';
+import {
+  LAMP_RADIUS,
+  ftlPylonReach,
+  hullReach,
+  hullVolumes,
+  runningLightAnchors,
+  type Keepout,
+} from '../domain/hullForm';
+import { exteriorLightRig, rigKeepouts } from '../domain/exteriorLights';
+import { placeWindows } from '../domain/windows';
 import { socketsFor } from './sockets';
 import { useReducedMotion } from './useReducedMotion';
 import { Hull } from './hulls/Hulls';
@@ -77,8 +85,8 @@ function HullMarkerLights({
   volumes: readonly HullVolume[];
   seed: number;
   accentColor: string;
-  /** Beacon positions. A scattered lamp gives way to a derived one. */
-  keepClear: readonly Vec3[];
+  /** Hull already claimed. A scattered lamp gives way to everything. */
+  keepClear: readonly Keepout[];
   dead: boolean;
   mode: RenderMode;
 }) {
@@ -94,7 +102,9 @@ function HullMarkerLights({
     <group>
       {lamps.map((lamp, i) => (
         <mesh key={i} position={[lamp.position[0], lamp.position[1], lamp.position[2]]}>
-          <sphereGeometry args={[0.045, 6, 6]} />
+          {/* `LAMP_RADIUS`, not a literal: the clearance arithmetic that keeps
+              these off the glazing measures the same number. */}
+          <sphereGeometry args={[LAMP_RADIUS, 6, 6]} />
           <EmissiveMaterial
             mode={mode}
             // Cold white broken up by the ship's trim, so the run reads as
@@ -137,16 +147,49 @@ export function Ship({ blueprint, mode, protrusions, burning, onReady }: ShipPro
     [blueprint.architecture, volumes],
   );
 
-  // Resolved here rather than inside `ExteriorLights` because two subsystems
-  // need it: the lighting rig renders it, and the hull marker lamps have to
-  // keep clear of the beacons it derives.
+  /**
+   * WHO YIELDS TO WHOM. Four populations bolt fixtures to one skin, and they
+   * are resolved here, together, in precedence order — rather than each
+   * deriving its own copy of the hull inside its own component and meeting the
+   * others for the first time on screen. That is what put floodlight housings
+   * over portholes and marker lamps in the middle of the glass on all five
+   * archetypes.
+   *
+   * The order is not arbitrary. It runs from what cannot move to what can:
+   *
+   *   1. SOCKETS — structural. Everything else is bolted near them.
+   *   2. THE LIGHTING RIG — floods are declared per archetype and aimed at
+   *      named parts of the ship; beacons are derived from the hull's own
+   *      extremities and mean nothing anywhere else. Neither can be nudged.
+   *   3. GLAZING — a rule engine that already discards most of its candidates,
+   *      so one more exclusion costs a porthole rather than the ship.
+   *   4. MARKER LAMPS — scattered and anonymous. The cheapest thing to move.
+   */
   const lightRig = useMemo(
     () => exteriorLightRig(blueprint.architecture, volumes, blueprint.seed),
     [blueprint.architecture, volumes, blueprint.seed],
   );
-  const beaconPositions = useMemo(
-    () => lightRig.beacons.map((beacon) => beacon.position),
-    [lightRig],
+  const rigZones = useMemo(() => rigKeepouts(lightRig), [lightRig]);
+
+  const windows = useMemo(
+    () =>
+      placeWindows(blueprint.architecture, volumes, sockets, blueprint.seed, {
+        keepClear: rigZones,
+      }),
+    [blueprint.architecture, volumes, sockets, blueprint.seed, rigZones],
+  );
+
+  // A window's keep-out is its own half-diagonal, so a lamp cannot land on the
+  // corner of a pane either.
+  const lampZones = useMemo<Keepout[]>(
+    () => [
+      ...rigZones,
+      ...windows.map((window) => ({
+        position: window.position,
+        radius: Math.hypot(window.extent[0], window.extent[1]) + LAMP_RADIUS,
+      })),
+    ],
+    [rigZones, windows],
   );
 
   const hullMaterial = (
@@ -284,7 +327,7 @@ export function Ship({ blueprint, mode, protrusions, burning, onReady }: ShipPro
           volumes={volumes}
           seed={blueprint.seed}
           accentColor={blueprint.accentColor}
-          keepClear={beaconPositions}
+          keepClear={lampZones}
           dead={dead}
           mode={mode}
         />
@@ -295,9 +338,7 @@ export function Ship({ blueprint, mode, protrusions, burning, onReady }: ShipPro
             off the fuel bays by a rule engine rather than by a coordinate
             somebody checked once. See `domain/windows.ts`. */}
         <ShipWindows
-          archetype={blueprint.architecture}
-          volumes={volumes}
-          sockets={sockets}
+          placements={windows}
           seed={blueprint.seed}
           wear={wear}
           condition={blueprint.condition}

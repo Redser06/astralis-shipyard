@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import type { Group } from 'three';
-import type { Blueprint } from '../domain/types';
+import type { Blueprint, Vec3 } from '../domain/types';
 import { getMaterial } from '../domain/components';
 import { getArchetype } from '../domain/architectures';
 import { deriveWear, isDerelict } from '../domain/condition';
 import { ftlPylonReach, hullReach, hullVolumes, runningLightAnchors } from '../domain/hullForm';
+import { exteriorLightRig } from '../domain/exteriorLights';
 import { socketsFor } from './sockets';
 import { useReducedMotion } from './useReducedMotion';
 import { Hull } from './hulls/Hulls';
@@ -38,30 +39,53 @@ interface ShipProps {
   onReady?: (group: Group) => void;
 }
 
-/* --------------------------- Running lights --------------------------- */
+/* --------------------------- Hull marker lights --------------------------- */
 
 /**
- * Navigation lamps, sampled off the hull surface rather than out of a box.
+ * Anonymous deck and marker lamps, sampled off the hull surface rather than out
+ * of a box.
  *
  * The box was ±2.6 × ±0.8 × ±6.5 and keyed only on the seed, so the fourteen
  * positions came out byte-identical on all five archetypes: roughly half sat in
  * open vacuum beside the ship and most of the rest were sealed inside solid
  * plate. `runningLightAnchors` ray-casts the real hull instead.
+ *
+ * WHAT THESE ARE NOT, and why the colours here are constrained. These landed
+ * before `lighting/ExteriorLights`, under the name "running lights", and every
+ * third lamp was rose red. That made two systems on the same ship claiming to
+ * be navigation lights, and the older one contradicted the newer: these are
+ * scattered along both flanks, the dorsal spine, fore and aft with no notion of
+ * which side of the hull they are on, so a ship carried its single correct port
+ * lamp plus four or five more red lamps — several of them to starboard. The
+ * maritime convention `domain/exteriorLights.ts` implements and unit-tests
+ * (`exteriorLightIssues` asserts port is left of starboard) only means anything
+ * if red and green appear exactly once each.
+ *
+ * So the division is now: RED AND GREEN BELONG TO THE BEACONS. These are deck
+ * lighting — the ship's own trim colour and a cold white, and dimmer than any
+ * beacon, so the lamps that declare the ship are still the brightest fixed
+ * points on it.
  */
-function RunningLights({
+function HullMarkerLights({
   volumes,
   seed,
   accentColor,
+  keepClear,
   dead,
   mode,
 }: {
   volumes: readonly HullVolume[];
   seed: number;
   accentColor: string;
+  /** Beacon positions. A scattered lamp gives way to a derived one. */
+  keepClear: readonly Vec3[];
   dead: boolean;
   mode: RenderMode;
 }) {
-  const lamps = useMemo(() => runningLightAnchors(volumes, seed), [volumes, seed]);
+  const lamps = useMemo(
+    () => runningLightAnchors(volumes, seed, { keepClear }),
+    [volumes, seed, keepClear],
+  );
 
   // A derelict has no power. Killing the lights is most of what sells it.
   if (dead) return null;
@@ -73,8 +97,10 @@ function RunningLights({
           <sphereGeometry args={[0.045, 6, 6]} />
           <EmissiveMaterial
             mode={mode}
-            color={i % 3 === 0 ? '#f43f5e' : accentColor}
-            intensity={3}
+            // Cold white broken up by the ship's trim, so the run reads as
+            // deck lighting rather than as a string of identical dots.
+            color={i % 3 === 0 ? '#cbd5f5' : accentColor}
+            intensity={1.8}
           />
         </mesh>
       ))}
@@ -109,6 +135,18 @@ export function Ship({ blueprint, mode, protrusions, burning, onReady }: ShipPro
   const sockets = useMemo(
     () => socketsFor(blueprint.architecture, volumes),
     [blueprint.architecture, volumes],
+  );
+
+  // Resolved here rather than inside `ExteriorLights` because two subsystems
+  // need it: the lighting rig renders it, and the hull marker lamps have to
+  // keep clear of the beacons it derives.
+  const lightRig = useMemo(
+    () => exteriorLightRig(blueprint.architecture, volumes, blueprint.seed),
+    [blueprint.architecture, volumes, blueprint.seed],
+  );
+  const beaconPositions = useMemo(
+    () => lightRig.beacons.map((beacon) => beacon.position),
+    [lightRig],
   );
 
   const hullMaterial = (
@@ -242,10 +280,11 @@ export function Ship({ blueprint, mode, protrusions, burning, onReady }: ShipPro
           }
         })}
 
-        <RunningLights
+        <HullMarkerLights
           volumes={volumes}
           seed={blueprint.seed}
           accentColor={blueprint.accentColor}
+          keepClear={beaconPositions}
           dead={dead}
           mode={mode}
         />
@@ -265,13 +304,7 @@ export function Ship({ blueprint, mode, protrusions, burning, onReady }: ShipPro
           mode={mode}
         />
 
-        <ExteriorLights
-          archetype={blueprint.architecture}
-          volumes={volumes}
-          seed={blueprint.seed}
-          dead={dead}
-          mode={mode}
-        />
+        <ExteriorLights rig={lightRig} dead={dead} mode={mode} />
       </group>
     </DamageProvider>
   );

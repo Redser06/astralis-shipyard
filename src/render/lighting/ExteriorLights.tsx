@@ -1,13 +1,12 @@
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Matrix4, Object3D, Quaternion, Vector3, type MeshStandardMaterial } from 'three';
-import type { ArchetypeId, Vec3 } from '../../domain/types';
-import type { HullVolume } from '../../domain/hullForm';
+import type { Vec3 } from '../../domain/types';
 import {
   FLOOD_STANDOFF,
   beamDirection,
-  exteriorLightRig,
   lensPosition,
+  type ExteriorLightRig,
   type Floodlight,
   type NavigationBeacon,
 } from '../../domain/exteriorLights';
@@ -35,9 +34,16 @@ import type { RenderMode } from '../materials/renderModes';
  */
 
 interface ExteriorLightsProps {
-  archetype: ArchetypeId;
-  volumes: readonly HullVolume[];
-  seed: number;
+  /**
+   * Resolved upstream, in `Ship`, rather than derived here from
+   * (archetype, volumes, seed).
+   *
+   * The beacon positions are needed in two places — here, to render the lamps,
+   * and by the hull marker lamps, which have to keep out of their way. Deriving
+   * the rig in both would mean two ray-cast passes over the hull per frame's
+   * worth of props and, worse, two things that are only equal by construction.
+   */
+  rig: ExteriorLightRig;
   dead: boolean;
   mode: RenderMode;
 }
@@ -210,18 +216,7 @@ function Beacon({
 
 /* --------------------------- The rig --------------------------- */
 
-export function ExteriorLights({
-  archetype,
-  volumes,
-  seed,
-  dead,
-  mode,
-}: ExteriorLightsProps) {
-  const rig = useMemo(
-    () => exteriorLightRig(archetype, volumes, seed),
-    [archetype, volumes, seed],
-  );
-
+export function ExteriorLights({ rig, dead, mode }: ExteriorLightsProps) {
   return (
     <group>
       {rig.floods.map((flood) => (

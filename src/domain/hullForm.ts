@@ -814,8 +814,29 @@ export function hullBounds(volumes: readonly HullVolume[]): { minZ: number; maxZ
   return { minZ, maxZ };
 }
 
+/** Tuning for `runningLightAnchors`. All optional; the defaults are the ship. */
+export interface LampAnchorOptions {
+  count?: number;
+  standoff?: number;
+  /**
+   * Points this population must not sit on top of.
+   *
+   * These lamps are scattered by seed, and other subsystems bolt their own
+   * fixtures to the same skin — most importantly the navigation beacons in
+   * `exteriorLights.ts`, which are derived from the hull's own extremities and
+   * so cannot move out of the way. Placed independently, the two eventually
+   * collide: on `industrial_expanse` the nearest pair came out 0.060 apart,
+   * well inside the beacon's 0.135 base radius, so a marker lamp rendered
+   * buried in another fixture. The scattered population is the one that can
+   * afford to give way, so it is the one that does.
+   */
+  keepClear?: readonly Vec3[];
+  /** How much room to leave around each `keepClear` point. */
+  clearance?: number;
+}
+
 /**
- * Navigation lamps that sit ON the ship.
+ * Marker lamps that sit ON the ship.
  *
  * The prototype scattered fourteen spheres through a hardcoded ±2.6 × ±0.8 ×
  * ±6.5 box keyed only on the seed. The positions came out byte-identical on all
@@ -823,19 +844,25 @@ export function hullBounds(volumes: readonly HullVolume[]): { minZ: number; maxZ
  * of the rest were sealed inside solid plate, rendering nothing. Here each lamp
  * is a measured point on the skin, so a wider hull carries its lights further
  * out by construction.
+ *
+ * These are anonymous deck lighting, NOT navigation lights — red and green mean
+ * port and starboard, and belong to the beacons alone. See `render/Ship.tsx`.
  */
 export function runningLightAnchors(
   volumes: readonly HullVolume[],
   seed: number,
-  count = 14,
-  standoff = 0.05,
+  options: LampAnchorOptions = {},
 ): LampAnchor[] {
+  const { count = 14, standoff = 0.05, keepClear = [], clearance = 0.28 } = options;
   const rng = streamFor(seed, 'lamps');
   const { minZ, maxZ } = hullBounds(volumes);
   const span = maxZ - minZ;
   const anchors: LampAnchor[] = [];
+  const clearanceSq = clearance * clearance;
 
   // Walk the hull nose to tail, alternating flanks, with a few dorsal lamps.
+  // The budget is three candidates per lamp, so a rejected position re-rolls at
+  // the same station rather than costing the ship a light.
   for (let i = 0; i < count * 3 && anchors.length < count; i++) {
     const step = anchors.length;
     const z = minZ + span * ((step + 0.5) / count) + (rng() - 0.5) * (span / count) * 0.6;
@@ -848,10 +875,17 @@ export function runningLightAnchors(
 
     const hit = raycastHull(volumes, add([0, 0, z], scale(direction, REACH)), scale(direction, -1));
     if (!hit) continue;
-    anchors.push({
-      position: add(hit.point, scale(hit.normal, standoff)),
-      normal: hit.normal,
+
+    const position = add(hit.point, scale(hit.normal, standoff));
+    const crowded = keepClear.some((point) => {
+      const dx = position[0] - point[0];
+      const dy = position[1] - point[1];
+      const dz = position[2] - point[2];
+      return dx * dx + dy * dy + dz * dz < clearanceSq;
     });
+    if (crowded) continue;
+
+    anchors.push({ position, normal: hit.normal });
   }
 
   return anchors;

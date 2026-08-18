@@ -9,6 +9,7 @@ import {
   runningLightAnchors,
   type HullVolume,
 } from './hullForm';
+import { exteriorLightRig } from './exteriorLights';
 import { socketsFor } from '../render/sockets';
 
 /**
@@ -181,6 +182,39 @@ describe('running lights', () => {
     const volumes = hullVolumes('industrial_expanse');
     expect(runningLightAnchors(volumes, 7)).toEqual(runningLightAnchors(volumes, 7));
     expect(runningLightAnchors(volumes, 7)).not.toEqual(runningLightAnchors(volumes, 8));
+  });
+
+  it('gives way to fixtures it is told to keep clear of', () => {
+    // These lamps are scattered by seed; the navigation beacons are derived
+    // from the hull's extremities and cannot move. Placed independently the two
+    // collided — on `industrial_expanse` the nearest pair came out 0.060 apart,
+    // inside the beacon's own base. The scattered population yields.
+    for (const archetype of ARCHETYPES) {
+      const volumes = hullVolumes(archetype);
+      const rig = exteriorLightRig(archetype, volumes, 4242);
+      const keepClear = rig.beacons.map((beacon) => beacon.position);
+      const clearance = 0.28;
+
+      const anchors = runningLightAnchors(volumes, 4242, { keepClear, clearance });
+
+      for (const anchor of anchors) {
+        for (const point of keepClear) {
+          const gap = Math.hypot(
+            anchor.position[0] - point[0],
+            anchor.position[1] - point[1],
+            anchor.position[2] - point[2],
+          );
+          expect(gap, `${archetype} marker lamp is inside a beacon`).toBeGreaterThanOrEqual(
+            clearance,
+          );
+        }
+      }
+
+      // Rejection re-rolls rather than costing the ship a lamp: the budget is
+      // three candidates per station, and a handful of exclusion spheres on a
+      // hull this size never exhausts it.
+      expect(anchors.length, `${archetype} lost lamps to the exclusion`).toBe(14);
+    }
   });
 });
 

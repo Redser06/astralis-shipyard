@@ -16,7 +16,9 @@ import { damageNormal, damageTexture } from './decalTextures';
  *
  * DECALS, NOT CSG. Cutting real holes would mean boolean geometry, and the SDK
  * survey was decisive against it: three-bvh-csg is stale, returned watertight
- * output on 22 of 1000 test pairs, and peer-conflicts with the three-mesh-bvh
+ * output on 22 of 1000 large scanned meshes in a benchmark authored by a
+ * competing vendor (weaker evidence than it looks at our geometry scale — see
+ * docs/THREEJS_ASSESSMENT.md), and peer-conflicts with the three-mesh-bvh
  * that drei already depends on. A decal projects a stamp onto the surface it
  * lands on and clips it to that surface, which is both what the marks need and
  * a dependency we already have — drei's `<Decal>` wraps three's DecalGeometry,

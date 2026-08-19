@@ -120,13 +120,33 @@ What is available and would raise fidelity most, in order:
 5. **`shaderMaterial`** — declarative custom materials, which is the honest
    route to per-texel wear (see the warning below).
 
-**Booleans are not the answer.** We considered CSG for real window openings and
-damage holes and rejected it on evidence: `three-bvh-csg` is stale at 0.0.x,
-an independent 1000-pair benchmark returned watertight output on only 22 of
-1000 cases, and it peer-conflicts with the `three-mesh-bvh` drei already ships —
-two competing monkeypatches on `Mesh.prototype.raycast`. Non-watertight output
-would also silently corrupt `src/export/glb.ts`. Decals are cheaper, more
-convincing, and already working.
+**Booleans are not the answer** — but be careful which reasons you keep.
+
+The conclusion stands: decals are cheaper, more convincing, and already working.
+Two of the reasons first written down here do not survive scrutiny. They are
+corrected rather than quietly deleted, because a load-bearing justification that
+is wrong is worse than none.
+
+- **That benchmark is not independent.** The figures cited for `three-bvh-csg`
+  (22 of 1000 pairs watertight, 978 ms median) are real, but the study is
+  authored by the vendor of the library that wins it at 1000/1000 and 21.9 ms.
+  It also tested 200K–1.5M-polygon scanned meshes. Our hulls are a dozen convex
+  primitives of a few hundred triangles — the regime where CSG is *least* likely
+  to fail. The citation proves far less about this codebase than it was used to
+  claim.
+- **There is no prototype conflict.** "Two competing monkeypatches on
+  `Mesh.prototype.raycast`" is false. drei's `<Bvh>` assigns per instance
+  (`mesh.current.raycast = acceleratedRaycast`), and `three-mesh-bvh` does not
+  self-install its extension — it exports `acceleratedRaycast` for a caller to
+  opt into.
+- **The peer conflict is real.** `three-bvh-csg@0.0.18` peers
+  `three-mesh-bvh >= 0.9.7`; drei 10.7.8 depends on `^0.8.3`, so npm resolves two
+  copies on disk. Bundle impact is near zero today only because nothing imports
+  drei's `Bvh`, so its copy tree-shakes out.
+
+The honest reason to stay with decals is simpler than any of that: a decal clips
+a stamp to the surface it lands on, which is exactly what located wear needs,
+and this ship has no modelled interior for a hole to reveal.
 
 ---
 

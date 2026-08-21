@@ -2,3 +2,9 @@ node_modules
 dist
 .firebase
 .DS_Store
+playwright-report
+test-results
+.shot*.mjs
+.env
+.env.local
+.env.*.local

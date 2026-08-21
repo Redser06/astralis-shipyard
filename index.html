@@ -3,82 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Astralis Shipyard — Next-Gen Starship Foundry</title>
-    <!-- Tailwind CSS CDN for instant styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Orbitron:wght@400;600;800;900&display=swap" rel="stylesheet">
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            fontFamily: {
-              orbitron: ['Orbitron', 'sans-serif'],
-              mono: ['JetBrains Mono', 'monospace'],
-              sans: ['Inter', 'sans-serif'],
-            },
-            colors: {
-              space: {
-                950: '#060913',
-                900: '#0B1120',
-                850: '#0F172A',
-                800: '#1E293B',
-              },
-              neon: {
-                cyan: '#38BDF8',
-                indigo: '#818CF8',
-                emerald: '#10B981',
-                amber: '#F59E0B',
-                rose: '#F43F5E',
-                violet: '#A855F7'
-              }
-            }
-          }
-        }
-      }
-    </script>
-    <style>
-      body {
-        margin: 0;
-        background-color: #060913;
-        color: #F8FAFC;
-        overflow-x: hidden;
-        user-select: none;
-      }
-      .glass-panel {
-        background: rgba(15, 23, 42, 0.75);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-      }
-      .glass-panel-glow {
-        background: rgba(15, 23, 42, 0.85);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(56, 189, 248, 0.25);
-        box-shadow: 0 0 25px rgba(56, 189, 248, 0.12);
-      }
-      /* Custom high-tech scrollbars */
-      ::-webkit-scrollbar {
-        width: 6px;
-        height: 6px;
-      }
-      ::-webkit-scrollbar-track {
-        background: rgba(11, 17, 32, 0.8);
-      }
-      ::-webkit-scrollbar-thumb {
-        background: rgba(56, 189, 248, 0.3);
-        border-radius: 3px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: rgba(56, 189, 248, 0.6);
-      }
-    </style>
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="Astralis Shipyard — an interactive 3D starship design studio. Build, kit out and weather your own spacecraft in the browser."
+    />
+    <title>Astralis Shipyard — Starship Design Studio</title>
+    <!--
+      Tailwind and the fonts used to be loaded from CDNs here, with the theme
+      configured by an inline <script>. Both now compile into the bundle:
+      the palette lives in src/index.css under @theme, the fonts ship via
+      @fontsource. No third-party requests, no console warning on every load.
+    -->
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <noscript>
+      <p style="padding: 2rem; font-family: sans-serif; color: #f8fafc">
+        Astralis Shipyard needs JavaScript and WebGL2 to render its 3D viewport.
+      </p>
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

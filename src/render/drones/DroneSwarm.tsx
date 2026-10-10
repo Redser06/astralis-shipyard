@@ -19,11 +19,11 @@ interface DroneSpec {
 }
 
 const DRONE_SPECS: readonly DroneSpec[] = [
-  { id: 'drone-port-bow', station: [-5.5, 1.2, 5.0], targetHull: [-2.2, 0.4, 4.0], speed: 0.6, phase: 0.0 },
-  { id: 'drone-stbd-bow', station: [5.5, 1.2, 5.0], targetHull: [2.2, 0.4, 4.0], speed: 0.55, phase: 1.5 },
-  { id: 'drone-dorsal-mid', station: [0.0, 4.8, 0.5], targetHull: [0.0, 1.8, 0.2], speed: 0.7, phase: 3.0 },
-  { id: 'drone-port-aft', station: [-6.0, 0.5, -6.0], targetHull: [-2.8, 0.2, -5.5], speed: 0.65, phase: 4.2 },
-  { id: 'drone-stbd-aft', station: [6.0, 0.5, -6.0], targetHull: [2.8, 0.2, -5.5], speed: 0.5, phase: 5.5 },
+  { id: 'drone-port-bow', station: [-6.8, 1.6, 5.0], targetHull: [-2.2, 0.4, 4.0], speed: 0.6, phase: 0.0 },
+  { id: 'drone-stbd-bow', station: [6.8, 1.6, 5.0], targetHull: [2.2, 0.4, 4.0], speed: 0.55, phase: 1.5 },
+  { id: 'drone-dorsal-mid', station: [0.0, 5.8, 0.5], targetHull: [0.0, 1.8, 0.2], speed: 0.7, phase: 3.0 },
+  { id: 'drone-port-aft', station: [-7.2, 1.0, -6.5], targetHull: [-2.8, 0.2, -5.5], speed: 0.65, phase: 4.2 },
+  { id: 'drone-stbd-aft', station: [7.2, 1.0, -6.5], targetHull: [2.8, 0.2, -5.5], speed: 0.5, phase: 5.5 },
 ];
 
 /**
@@ -158,34 +158,34 @@ function IndustrialMaintenanceDrone({
   return (
     <group>
       <group ref={groupRef} position={spec.station}>
-        {/* Main Avionics Pod (Matte Graphite Composite) */}
+        {/* Main Avionics Chassis (Heavy Fleet Graphite Composite) */}
         <mesh castShadow receiveShadow>
-          <boxGeometry args={[0.75, 0.35, 0.95]} />
+          <boxGeometry args={[1.8, 0.75, 2.2]} />
           <meshStandardMaterial color="#1e293b" roughness={0.4} metalness={0.7} />
         </mesh>
 
-        {/* High-Visibility Aviation Yellow Hazard Plate */}
-        <mesh position={[0, 0.18, 0]}>
-          <boxGeometry args={[0.77, 0.04, 0.5]} />
+        {/* High-Visibility Aviation Yellow Hazard Identification Plate */}
+        <mesh position={[0, 0.39, 0]}>
+          <boxGeometry args={[1.82, 0.06, 1.2]} />
           <meshStandardMaterial color="#f59e0b" roughness={0.5} metalness={0.3} />
         </mesh>
 
-        {/* Chamfered Nose Cap */}
-        <mesh position={[0, 0, 0.52]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-          <cylinderGeometry args={[0.26, 0.36, 0.2, 6]} />
+        {/* Chamfered Heavy Nose Cap */}
+        <mesh position={[0, 0, 1.25]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+          <cylinderGeometry args={[0.55, 0.8, 0.5, 6]} />
           <meshStandardMaterial color="#0f172a" roughness={0.3} metalness={0.8} />
         </mesh>
 
-        {/* Forward Sensor Eye Dome */}
-        <mesh position={[0, 0.08, 0.62]}>
-          <sphereGeometry args={[0.09, 12, 10]} />
+        {/* Forward Primary Sensor Eye Dome */}
+        <mesh position={[0, 0.18, 1.55]}>
+          <sphereGeometry args={[0.22, 14, 12]} />
           <meshStandardMaterial color="#0284c7" roughness={0.1} metalness={0.9} />
         </mesh>
 
         {/* Flashing Amber Navigation Strobe */}
-        <group ref={beaconRef} position={[0, 0.22, -0.3]}>
+        <group ref={beaconRef} position={[0, 0.48, -0.7]}>
           <mesh>
-            <sphereGeometry args={[0.05, 8, 8]} />
+            <sphereGeometry args={[0.1, 8, 8]} />
             <meshStandardMaterial
               color="#fbbf24"
               emissive="#fbbf24"
@@ -193,51 +193,61 @@ function IndustrialMaintenanceDrone({
               toneMapped={false}
             />
           </mesh>
-          <pointLight color="#fbbf24" intensity={2} distance={4} />
+          <pointLight color="#fbbf24" intensity={4} distance={8} />
         </group>
 
         {/* Outrigger Thruster Pods (Port & Starboard) */}
-        {[-0.46, 0.46].map((x, i) => (
-          <group key={`thruster-${i}`} position={[x, 0, -0.1]}>
-            {/* Strut bracket */}
+        {[-1.15, 1.15].map((x, i) => (
+          <group key={`thruster-${i}`} position={[x, 0, -0.2]}>
+            {/* Structural Strut Bracket */}
             <mesh>
-              <boxGeometry args={[0.18, 0.08, 0.2]} />
+              <boxGeometry args={[0.45, 0.18, 0.5]} />
               <meshStandardMaterial color="#334155" roughness={0.6} metalness={0.8} />
             </mesh>
-            {/* Thruster cylinder */}
-            <mesh position={[x > 0 ? 0.08 : -0.08, 0, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-              <cylinderGeometry args={[0.11, 0.13, 0.48, 10]} />
+            {/* Heavy Thruster Nacelle */}
+            <mesh position={[x > 0 ? 0.2 : -0.2, 0, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+              <cylinderGeometry args={[0.26, 0.3, 1.2, 12]} />
               <meshStandardMaterial color="#0f172a" roughness={0.4} metalness={0.9} />
             </mesh>
-            {/* Rear micro-RCS nozzle */}
-            <mesh position={[x > 0 ? 0.08 : -0.08, 0, -0.26]} rotation={[Math.PI / 2, 0, 0]}>
-              <cylinderGeometry args={[0.06, 0.09, 0.08, 8]} />
+            {/* Rear Micro-RCS Nozzle */}
+            <mesh position={[x > 0 ? 0.2 : -0.2, 0, -0.65]} rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[0.14, 0.22, 0.18, 8]} />
               <meshStandardMaterial color="#475569" roughness={0.3} metalness={0.9} />
+            </mesh>
+            {/* Cyan Plasma Exhaust Halo */}
+            <mesh position={[x > 0 ? 0.2 : -0.2, 0, -0.75]} rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[0.12, 0.18, 0.12, 10]} />
+              <meshStandardMaterial
+                color="#06b6d4"
+                emissive="#06b6d4"
+                emissiveIntensity={4.0}
+                toneMapped={false}
+              />
             </mesh>
           </group>
         ))}
 
         {/* Articulated Forward Welding Manipulator Arm */}
-        <group position={[0, -0.14, 0.48]}>
+        <group position={[0, -0.32, 1.1]}>
           <mesh rotation={[0.2, 0, 0]} castShadow>
-            <cylinderGeometry args={[0.035, 0.04, 0.42, 6]} />
+            <cylinderGeometry args={[0.07, 0.08, 0.9, 8]} />
             <meshStandardMaterial color="#475569" roughness={0.5} metalness={0.8} />
           </mesh>
-          {/* Torch nozzle tip */}
-          <mesh position={[0, -0.15, 0.2]} rotation={[0.4, 0, 0]}>
-            <cylinderGeometry args={[0.02, 0.035, 0.15, 8]} />
+          {/* Heavy Torch Nozzle Tip */}
+          <mesh position={[0, -0.32, 0.42]} rotation={[0.4, 0, 0]}>
+            <cylinderGeometry args={[0.04, 0.07, 0.32, 8]} />
             <meshStandardMaterial color="#0f172a" roughness={0.3} metalness={0.9} />
           </mesh>
         </group>
 
-        {/* Directional Industrial Work Spotlight */}
+        {/* High-Intensity Volumetric Industrial Work Spotlight */}
         <spotLight
           ref={spotRef}
           color="#fef3c7"
-          intensity={isRepairing ? 18 : 6}
-          angle={Math.PI / 7}
+          intensity={isRepairing ? 28 : 12}
+          angle={Math.PI / 6}
           penumbra={0.4}
-          distance={16}
+          distance={30}
           castShadow
         />
       </group>

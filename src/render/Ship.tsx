@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import type { Group } from 'three';
-import type { Blueprint } from '../domain/types';
+import type { Blueprint, MissionState } from '../domain/types';
 import { getMaterial } from '../domain/components';
 import { getArchetype } from '../domain/architectures';
 import { deriveWear, isDerelict } from '../domain/condition';
@@ -44,6 +44,7 @@ interface ShipProps {
   protrusions: Protrusions;
   burning: boolean;
   assemblyProgress?: number | null;
+  missionState?: MissionState | null;
   /** Hands the assembled ship group out so it can be exported to .glb. */
   onReady?: (group: Group) => void;
 }
@@ -127,6 +128,7 @@ export function Ship({
   protrusions,
   burning,
   assemblyProgress,
+  missionState,
   onReady,
 }: ShipProps) {
   const groupRef = useRef<Group>(null);
@@ -248,10 +250,71 @@ export function Ship({
       group.rotation.z += delta * 0.09;
       group.rotation.x += delta * 0.035;
       group.position.y = Math.sin(t * 0.3) * 0.06;
+    } else if (missionState) {
+      switch (missionState) {
+        case 'departing': {
+          // Forward clearance glide and slight nose pitch down
+          group.position.x = 0;
+          group.position.y = Math.sin(t * 1.5) * 0.08;
+          group.position.z = Math.sin(t * 0.8) * 0.5;
+          group.rotation.x = -0.03;
+          group.rotation.z = Math.sin(t * 0.6) * 0.02;
+          break;
+        }
+        case 'warp': {
+          // High-speed warp vibration & micro-tremor
+          group.position.x = 0;
+          group.position.y = 0;
+          group.position.z = (Math.random() - 0.5) * 0.06;
+          group.rotation.x = 0;
+          group.rotation.z = (Math.random() - 0.5) * 0.01;
+          break;
+        }
+        case 'combat': {
+          // Tactical evasive weave and banking roll (±12° = ±0.21 rad)
+          group.position.x = Math.sin(t * 1.4) * 0.9;
+          group.position.y = Math.sin(t * 1.8) * 0.4;
+          group.position.z = 0;
+          group.rotation.z = Math.sin(t * 1.6) * 0.21;
+          group.rotation.x = Math.sin(t * 1.2) * 0.08;
+          break;
+        }
+        case 'asteroid_field': {
+          // Deliberate obstacle navigation weave
+          group.position.x = Math.sin(t * 0.7) * 0.6;
+          group.position.y = Math.sin(t * 1.2) * 0.15;
+          group.position.z = 0;
+          group.rotation.z = Math.sin(t * 0.7) * 0.08;
+          group.rotation.x = Math.sin(t * 0.5) * 0.04;
+          break;
+        }
+        case 'planet_orbit':
+        case 'return_transit': {
+          // Steady orbital traverse
+          group.position.x = Math.sin(t * 0.5) * 0.3;
+          group.position.y = Math.sin(t * 1.0) * 0.12;
+          group.position.z = 0;
+          group.rotation.z = Math.sin(t * 0.5) * 0.04;
+          group.rotation.x = 0;
+          break;
+        }
+        case 'docked':
+        case 'repair':
+        default: {
+          // Stable drydock berth hovering
+          group.position.x = 0;
+          group.position.y = Math.sin(t * 1.2) * 0.05;
+          group.position.z = 0;
+          group.rotation.set(0, 0, 0);
+          break;
+        }
+      }
     } else {
       group.rotation.z = 0;
       group.rotation.x = 0;
+      group.position.x = 0;
       group.position.y = Math.sin(t * 1.5) * 0.12;
+      group.position.z = 0;
     }
   });
 

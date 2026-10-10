@@ -138,19 +138,31 @@ export default function App() {
   const shipGroup = useRef<Group | null>(null);
   const burnTimer = useRef<number | null>(null);
 
+  const telemetryRef = useRef<MissionTelemetry>(missionTelemetry);
+  useEffect(() => {
+    telemetryRef.current = missionTelemetry;
+  }, [missionTelemetry]);
+
   // Step autonomous mission loop
   useEffect(() => {
     if (!missionActive) return;
 
     let lastTime = performance.now();
+    let lastFlush = 0;
     let animId: number;
 
     const loop = (now: number) => {
       const dt = Math.min(0.2, (now - lastTime) / 1000);
       lastTime = now;
 
-      setMissionTelemetry((prev) => {
-        const result = stepMission(prev, dt, { timeScale: missionTimeScale });
+      // Pure domain step executed smoothly
+      const result = stepMission(telemetryRef.current, dt, { timeScale: missionTimeScale });
+      telemetryRef.current = result.telemetry;
+
+      // Throttle React DOM re-renders to 10Hz (every 100ms) to eliminate 60Hz DOM thrashing
+      if (now - lastFlush >= 100) {
+        lastFlush = now;
+        setMissionTelemetry(result.telemetry);
         setBlueprint((b) => ({
           ...b,
           condition: Math.max(0, Math.min(1, 1.0 - result.telemetry.hullIntegrity)),
@@ -195,9 +207,7 @@ export default function App() {
         } else if (result.telemetry.state !== 'warp') {
           setBurning(false);
         }
-
-        return result.telemetry;
-      });
+      }
 
       animId = requestAnimationFrame(loop);
     };
@@ -465,6 +475,7 @@ export default function App() {
                 (missionActive && missionTelemetry.state === 'repair') ||
                 (showDrones && blueprint.condition > 0.05)
               }
+              missionState={missionActive ? missionTelemetry.state : null}
             />
           </Suspense>
 

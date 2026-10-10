@@ -52,6 +52,33 @@ export const HULL_ARCHITECTURES: readonly Archetype[] = [
     modifiers: { speed: 12, armor: -4, firepower: -2, stealth: 10, warp: -4, massFactor: 0.85 },
     ringRadius: 4.4,
   },
+  {
+    id: 'starfleet_explorer',
+    name: 'Federation Heavy Explorer',
+    tag: 'Saucer Primary & Dual Outrigger Nacelles',
+    desc: 'Elliptical saucer primary hull with swept neck pylon, cylindrical engineering hull, and dual outrigger warp nacelles on angled pylons.',
+    icon: 'Radio',
+    modifiers: { speed: 4, armor: 6, firepower: 8, stealth: -5, warp: 24, massFactor: 1.15 },
+    ringRadius: 6.8,
+  },
+  {
+    id: 'delta_strikefighter',
+    name: 'Starfighter Dagger Interceptor',
+    tag: 'Sharp Triangular Wedge & Articulated S-Foils',
+    desc: 'Sharp triangular wedge hull with chamfered dorsal ridge, recessed canopy, and articulating quad strike wings with wingtip blasters.',
+    icon: 'Rocket',
+    modifiers: { speed: 22, armor: -8, firepower: 12, stealth: 15, warp: -12, massFactor: 0.65 },
+    ringRadius: 3.8,
+  },
+  {
+    id: 'deep_space_cruiser',
+    name: 'Hard-SciFi Vertical Kilomaster',
+    tag: 'Skyscraper Cylindrical Stack & Fusion Drive',
+    desc: 'Tall vertical-stack cylindrical skyscraper hull with counter-rotating hab drum, forward spinal railgun trench, and massive magnetic fusion bell.',
+    icon: 'Boxes',
+    modifiers: { speed: -4, armor: 26, firepower: 18, stealth: -35, warp: -8, massFactor: 1.6 },
+    ringRadius: 5.4,
+  },
 ] as const;
 
 const BY_ID = new Map<ArchetypeId, Archetype>(HULL_ARCHITECTURES.map((a) => [a.id, a]));

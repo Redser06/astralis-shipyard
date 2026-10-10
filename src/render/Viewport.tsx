@@ -13,6 +13,9 @@ import {
   type Protrusions,
 } from './viewportOptions';
 import type { RenderMode } from './materials/renderModes';
+import { DroneSwarm } from './drones/DroneSwarm';
+import { ShuttleCraft } from './drones/ShuttleCraft';
+import { CinematicDirector, type CinematicCut } from './camera/CinematicDirector';
 
 
 /**
@@ -79,6 +82,10 @@ export interface ViewportProps {
   lightIntensity: number;
   cameraPreset: CameraPreset;
   onShipReady?: (group: Group) => void;
+  cinematicActive?: boolean;
+  cinematicCut?: CinematicCut;
+  assemblyProgress?: number | null;
+  isRepairing?: boolean;
 }
 
 function detectWebGL2(): boolean {
@@ -118,6 +125,10 @@ export function Viewport({
   lightIntensity,
   cameraPreset,
   onShipReady,
+  cinematicActive = false,
+  cinematicCut = 'gantry_dolly',
+  assemblyProgress,
+  isRepairing = false,
 }: ViewportProps) {
   // Evaluated once on mount rather than during render, so SSR/tests do not
   // touch the DOM unexpectedly.
@@ -149,8 +160,12 @@ export function Viewport({
           mode={mode}
           protrusions={protrusions}
           burning={burning}
+          assemblyProgress={assemblyProgress}
           onReady={onShipReady}
         />
+
+        <DroneSwarm condition={blueprint.condition} isRepairing={isRepairing} />
+        <ShuttleCraft />
 
         {/*
           No PCSS here, deliberately.
@@ -167,20 +182,25 @@ export function Viewport({
           for and what we get — asking for the deprecated constant bought a
           console warning and the same shadows.
         */}
-        <CameraRig preset={cameraPreset} />
-
-        <OrbitControls
-          makeDefault
-          enableDamping
-          dampingFactor={0.08}
-          minDistance={8}
-          maxDistance={90}
-          // The entire auto-rotate fix. In the prototype these were read once
-          // inside a useEffect(..., []) render loop and could never change;
-          // here they are props, re-read by the controls on every update.
-          autoRotate={autoRotate}
-          autoRotateSpeed={rotationSpeed * 2}
-        />
+        {cinematicActive ? (
+          <CinematicDirector active={true} cut={cinematicCut} />
+        ) : (
+          <>
+            <CameraRig preset={cameraPreset} />
+            <OrbitControls
+              makeDefault
+              enableDamping
+              dampingFactor={0.08}
+              minDistance={8}
+              maxDistance={90}
+              // The entire auto-rotate fix. In the prototype these were read once
+              // inside a useEffect(..., []) render loop and could never change;
+              // here they are props, re-read by the controls on every update.
+              autoRotate={autoRotate}
+              autoRotateSpeed={rotationSpeed * 2}
+            />
+          </>
+        )}
 
         {/*
           No ambient occlusion, and the reason is measured rather than assumed.

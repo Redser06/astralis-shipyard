@@ -1,6 +1,6 @@
 import { useMemo, useRef, type ReactNode } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Matrix4, Quaternion, Vector3, type Mesh, type MeshStandardMaterial } from 'three';
+import { MathUtils, Matrix4, Quaternion, Vector3, type Group, type Mesh, type MeshStandardMaterial } from 'three';
 import type {
   FtlId,
   FuelId,
@@ -14,9 +14,11 @@ import { EmissiveMaterial } from '../materials/HullMaterial';
 import { ENGINE_PROFILE } from './engineProfile';
 import type { RenderMode } from '../materials/renderModes';
 import { Conduit, Fitting, MountFlange } from './Fitting';
-import { HYPER_SHUNT_HOUSING, getWeaponFitting } from '../../domain/fittings';
+import { HYPER_SHUNT_HOUSING } from '../../domain/fittings';
 import type { DamageOptions, DamageSurface } from '../../domain/damage';
 import { SurfaceDamage } from '../damage/Damage';
+import { ArticulatedTurret } from './ArticulatedTurret';
+import { MissilePod } from './MissilePod';
 
 /**
  * Hardware that mounts to hull sockets.
@@ -31,21 +33,6 @@ import { SurfaceDamage } from '../damage/Damage';
  *   Nothing of substance lives below y = 0. `SocketMount` puts local +Y on the
  *   socket's outward normal and local +Z on its `up` reference, so the part's
  *   mounting face lands exactly on the hull surface the socket was seated on.
- *
- * The file used to claim the first half of that and honour it in about half the
- * parts: the radiator and the LADAR spine were based at y = 0, but the engine
- * bell, the turret base, the RCS block, the radar collar and every fuel tank
- * were *centred* on the origin. Half of each of those sat behind the mount
- * plane, which is why one socket could bury a tier-1 cryo tank through a
- * dreadnought's armour skirt and leave a tier-4 zero-point core hanging in
- * space — the component picker silently decided whether the ship was bolted
- * together. Anything centred on its socket is now a deliberate, commented
- * exception, and there is exactly one: the FTL ring, which encircles the hull
- * rather than protruding from a face and so is not socket-mounted at all.
- *
- * Every mount also carries a flange, and the parts with a real standoff carry
- * conduits down to it, so a join reads as engineered rather than as two solids
- * happening to intersect.
  */
 
 const SIZE_SCALE: Record<SocketSize, number> = { S: 0.7, M: 1.0, L: 1.4 };
@@ -53,25 +40,22 @@ const SIZE_SCALE: Record<SocketSize, number> = { S: 0.7, M: 1.0, L: 1.4 };
 export function SocketMount({
   socket,
   children,
+  retracted = false,
 }: {
   socket: Socket;
   children: ReactNode;
+  retracted?: boolean;
 }) {
+  const mountGroupRef = useRef<Group>(null);
+  const extensionRef = useRef(retracted ? 0.0 : 1.0);
+
   const transform = useMemo(() => {
     const normal = new Vector3(...socket.normal).normalize();
 
     // Build the full basis rather than the shortest arc from +Y to the normal.
-    // `socket.up` was declared, documented as "roll reference, so parts do not
-    // spin arbitrarily about their normal", populated on all 43 sockets — and
-    // never read, so every part's roll was whatever setFromUnitVectors happened
-    // to produce, and for the ventral sockets (normal exactly antiparallel to
-    // +Y) it came from three's arbitrary-perpendicular fallback. Mirrored pairs
-    // rolled differently from each other as a result.
     const up = new Vector3(...socket.up);
     const forward = up.clone().addScaledVector(normal, -up.dot(normal));
     if (forward.lengthSq() < 1e-8) {
-      // `up` is parallel to the normal and cannot resolve roll. Any stable
-      // perpendicular will do; pick one deterministically.
       forward.set(0, 0, 1).addScaledVector(normal, -normal.z);
       if (forward.lengthSq() < 1e-8) forward.set(1, 0, 0);
     }
@@ -89,13 +73,26 @@ export function SocketMount({
     };
   }, [socket]);
 
+  useFrame((_, delta) => {
+    const target = retracted ? 0.0 : 1.0;
+    extensionRef.current = MathUtils.damp(extensionRef.current, target, 5.0, delta);
+    if (mountGroupRef.current) {
+      mountGroupRef.current.position.y = (extensionRef.current - 1.0) * 0.35;
+      const s = Math.max(0.001, extensionRef.current);
+      mountGroupRef.current.scale.set(s, s, s);
+      mountGroupRef.current.visible = extensionRef.current > 0.03;
+    }
+  });
+
   return (
     <group
       position={transform.position}
       quaternion={transform.quaternion}
       scale={transform.scale}
     >
-      {children}
+      <group ref={mountGroupRef}>
+        {children}
+      </group>
     </group>
   );
 }
@@ -396,12 +393,27 @@ export function Turret({
   weapon,
   mode,
   dead,
+  firing = false,
+  targetPosition = null,
 }: {
   weapon: WeaponId;
   mode: RenderMode;
   dead: boolean;
+  firing?: boolean;
+  targetPosition?: Vector3 | null;
 }) {
-  return <Fitting def={getWeaponFitting(weapon)} mode={mode} dead={dead} />;
+  if (weapon === 'quantum_torpedoes') {
+    return <MissilePod mode={mode} dead={dead} firing={firing} />;
+  }
+  return (
+    <ArticulatedTurret
+      weapon={weapon}
+      mode={mode}
+      dead={dead}
+      firing={firing}
+      targetPosition={targetPosition}
+    />
+  );
 }
 
 /* --------------------------- Sensors --------------------------- */

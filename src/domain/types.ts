@@ -13,7 +13,10 @@ export type ArchetypeId =
   | 'industrial_expanse'
   | 'brutalist_dreadnought'
   | 'outrigger_science'
-  | 'aerodynamic_sleek';
+  | 'aerodynamic_sleek'
+  | 'starfleet_explorer'
+  | 'delta_strikefighter'
+  | 'deep_space_cruiser';
 
 export type SublightId = 'ion_pulse' | 'mpd_thruster' | 'fusion_torch';
 export type FtlId = 'none' | 'hyper_shunt' | 'alcubierre_ring' | 'graviton_singularity';
@@ -155,6 +158,28 @@ export interface Blueprint {
    * Sculptor. Optional so older saved blueprints still load.
    */
   hullProfile?: readonly ProfilePoint[];
+  /** Optional installation mask for hardpoint components. */
+  installedComponents?: Record<string, boolean>;
+}
+
+export type MissionState =
+  | 'docked'
+  | 'departing'
+  | 'warp'
+  | 'asteroid_field'
+  | 'planet_orbit'
+  | 'combat'
+  | 'return_transit'
+  | 'repair';
+
+export interface MissionTelemetry {
+  state: MissionState;
+  progress: number; // 0.0 -> 1.0 within phase
+  currentWaypoint: string;
+  hullIntegrity: number; // 0.35 -> 1.0 hard floor
+  activeThreats: number;
+  droneSorties: number;
+  combatLog: string[];
 }
 
 export interface ShipStats {

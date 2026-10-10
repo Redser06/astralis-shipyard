@@ -5,6 +5,7 @@ import { AdditiveBlending, type Group, type Points } from 'three';
 import { mulberry32 } from '../../domain/rng';
 import { useReducedMotion } from '../useReducedMotion';
 import type { EnvironmentId } from '../viewportOptions';
+import { DrydockLighting } from '../lighting/DrydockLighting';
 
 
 /**
@@ -153,6 +154,7 @@ function Drydock() {
         </mesh>
       </group>
       <WeldingSparks />
+      <DrydockLighting intensity={1.0} />
       {/* Deck plate — gives the shadows something to land on */}
       <mesh position={[0, -11, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[80, 80]} />

@@ -155,6 +155,21 @@ const FLOOD_MOUNTS: Readonly<Record<ArchetypeId, readonly FloodIntent[]>> = {
     // with the fin it lands 0.36 from its own lens.
     { id: 'flood-drive', at: [0, 1.4, -2.6], normal: [0, 1, 0], aim: [0, 0.4, -7.4], angle: 0.44, range: 10, intensity: 24, size: 0.2 },
   ],
+  starfleet_explorer: [
+    { id: 'flood-bow', at: [0, 1.1, 4.0], normal: [0, 1, 0], aim: [0, 0.5, 7.8], angle: 0.44, range: 10, intensity: 28, size: 0.22 },
+    { id: 'flood-saucer', at: [3.4, 0.5, 3.0], normal: [1, 0.2, 0], aim: [4.2, 0.6, -2.0], angle: 0.5, range: 10, intensity: 24, size: 0.2, mirror: true },
+    { id: 'flood-drive', at: [0, 0.5, -2.4], normal: [0, 1, 0], aim: [0, -0.9, -6.0], angle: 0.44, range: 10, intensity: 25, size: 0.2 },
+  ],
+  delta_strikefighter: [
+    { id: 'flood-bow', at: [0, 0.7, 2.8], normal: [0, 1, 0], aim: [0, 0, 4.8], angle: 0.44, range: 10, intensity: 24, size: 0.18 },
+    { id: 'flood-wing', at: [1.4, 0.6, -1.0], normal: [1, 0.4, 0], aim: [3.4, 0.5, -2.0], angle: 0.5, range: 7, intensity: 18, size: 0.16, mirror: true },
+    { id: 'flood-drive', at: [0, 1.0, -2.0], normal: [0, 1, 0], aim: [0, 0, -4.8], angle: 0.44, range: 8, intensity: 22, size: 0.18 },
+  ],
+  deep_space_cruiser: [
+    { id: 'flood-bow', at: [0, 1.4, 4.8], normal: [0, 1, 0], aim: [0, 1.4, 7.2], angle: 0.44, range: 10, intensity: 32, size: 0.24 },
+    { id: 'flood-hab', at: [1.9, 1.2, 1.0], normal: [1, 0.5, 0], aim: [0, 0, 4.0], angle: 0.5, range: 9, intensity: 25, size: 0.2, mirror: true },
+    { id: 'flood-drive', at: [0, 1.4, -2.8], normal: [0, 1, 0], aim: [0, 0, -6.8], angle: 0.44, range: 12, intensity: 35, size: 0.24 },
+  ],
 };
 
 /* ------------------------------------------------------------------ */

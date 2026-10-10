@@ -73,6 +73,7 @@ const PROJECTION_DEPTH = 2.2;
 function Mark({ mark, offset }: { mark: DamageMark; offset?: Vec3 }) {
   const map = damageTexture(mark.kind);
   const normalMap = damageNormal(mark.kind);
+  const state = useDamageState();
 
   const position = useMemo<[number, number, number]>(
     () => [
@@ -90,31 +91,52 @@ function Mark({ mark, offset }: { mark: DamageMark; offset?: Vec3 }) {
 
   if (!map) return null;
 
+  // Emergency bulkhead glow (#ef4444) visible through breaches when integrity < 60% (structural wear > 0.40)
+  const isEmergencyBreach = mark.kind === 'breach' && (state?.wear.structural ?? 0) > 0.40;
+
   return (
-    <Decal
-      position={position}
-      rotation={rotation}
-      scale={[mark.size, mark.size, mark.size * PROJECTION_DEPTH]}
-      map={map}
-      // depthTest stays on — drei defaults it off, which on a ship with parts
-      // in front of plate would draw every mark through whatever occludes it.
-      depthTest
-      polygonOffsetFactor={-14}
-    >
-      <meshStandardMaterial
+    <group>
+      <Decal
+        position={position}
+        rotation={rotation}
+        scale={[mark.size, mark.size, mark.size * PROJECTION_DEPTH]}
         map={map}
-        normalMap={normalMap ?? undefined}
-        transparent
-        opacity={mark.opacity}
-        // Transparent surfaces that write depth sort against each other badly,
-        // and several marks routinely overlap on a hard-worked hull.
-        depthWrite={false}
-        polygonOffset
+        // depthTest stays on — drei defaults it off, which on a ship with parts
+        // in front of plate would draw every mark through whatever occludes it.
+        depthTest
         polygonOffsetFactor={-14}
-        roughness={mark.kind === 'scuff' ? 0.28 : 0.92}
-        metalness={mark.kind === 'scuff' || mark.kind === 'patch' ? 0.75 : 0.1}
-      />
-    </Decal>
+      >
+        <meshStandardMaterial
+          map={map}
+          normalMap={normalMap ?? undefined}
+          transparent
+          opacity={mark.opacity}
+          // Transparent surfaces that write depth sort against each other badly,
+          // and several marks routinely overlap on a hard-worked hull.
+          depthWrite={false}
+          polygonOffset
+          polygonOffsetFactor={-14}
+          roughness={mark.kind === 'scuff' ? 0.28 : 0.92}
+          metalness={mark.kind === 'scuff' || mark.kind === 'patch' ? 0.75 : 0.1}
+        />
+      </Decal>
+      {isEmergencyBreach && (
+        <Decal
+          position={position}
+          rotation={rotation}
+          scale={[mark.size * 0.55, mark.size * 0.55, mark.size * PROJECTION_DEPTH]}
+          depthTest
+          polygonOffsetFactor={-12}
+        >
+          <meshBasicMaterial
+            color="#ef4444"
+            toneMapped={false}
+            transparent
+            opacity={0.9}
+          />
+        </Decal>
+      )}
+    </group>
   );
 }
 

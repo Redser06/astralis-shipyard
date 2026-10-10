@@ -25,6 +25,9 @@ const ARCHETYPES: ArchetypeId[] = [
   'brutalist_dreadnought',
   'outrigger_science',
   'aerodynamic_sleek',
+  'starfleet_explorer',
+  'delta_strikefighter',
+  'deep_space_cruiser',
 ];
 
 const SEEDS = [0, 3, 4242, 0xbeef];

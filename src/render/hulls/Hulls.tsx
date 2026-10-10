@@ -195,6 +195,88 @@ export function Hull({ archetype, material, profile }: { archetype: ArchetypeId 
           />
         );
       })}
+
+      {/* Signature archetype visual accents */}
+      {archetype === 'starfleet_explorer' && (
+        <group>
+          {/* Glowing red/orange Bussard ramjets at nacelle tips */}
+          {[-1, 1].map((side) => (
+            <group key={`bussard-${side}`} position={[side * 4.2, 0.6, 1.25]}>
+              <mesh>
+                <sphereGeometry args={[0.73, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
+                <meshStandardMaterial
+                  color="#ff4422"
+                  emissive="#ff3b20"
+                  emissiveIntensity={2.8}
+                  roughness={0.2}
+                  metalness={0.1}
+                />
+              </mesh>
+              {/* Cyan warp grilles on nacelle inboard flanks */}
+              <mesh position={[-side * 0.42, 0, -4.6]}>
+                <boxGeometry args={[0.08, 0.4, 6.2]} />
+                <meshStandardMaterial
+                  color="#06b6d4"
+                  emissive="#06b6d4"
+                  emissiveIntensity={2.4}
+                  roughness={0.1}
+                />
+              </mesh>
+            </group>
+          ))}
+          {/* Navigational deflector dish glow */}
+          <mesh position={[0, -0.9, 2.21]} rotation={[-Math.PI / 2, 0, 0]}>
+            <circleGeometry args={[0.75, 20]} />
+            <meshStandardMaterial
+              color="#f59e0b"
+              emissive="#f59e0b"
+              emissiveIntensity={2.6}
+              roughness={0.2}
+            />
+          </mesh>
+        </group>
+      )}
+
+      {archetype === 'delta_strikefighter' && (
+        <group>
+          {/* Rear exposed circular ion thrust ports */}
+          {[-1, 1].map((side) => (
+            <mesh key={`ion-${side}`} position={[side * 1.2, 0, -5.02]} rotation={[Math.PI, 0, 0]}>
+              <circleGeometry args={[0.42, 16]} />
+              <meshStandardMaterial
+                color="#38bdf8"
+                emissive="#38bdf8"
+                emissiveIntensity={3.2}
+                roughness={0.2}
+              />
+            </mesh>
+          ))}
+        </group>
+      )}
+
+      {archetype === 'deep_space_cruiser' && (
+        <group>
+          {/* Fusion drive magnetic containment ring glow */}
+          <mesh position={[0, 0, -7.42]} rotation={[Math.PI, 0, 0]}>
+            <ringGeometry args={[1.2, 2.7, 24]} />
+            <meshStandardMaterial
+              color="#6366f1"
+              emissive="#818cf8"
+              emissiveIntensity={3.0}
+              roughness={0.2}
+            />
+          </mesh>
+          {/* Spinal railgun trench glow */}
+          <mesh position={[0, 1.5, 6.8]}>
+            <boxGeometry args={[0.2, 0.05, 4.4]} />
+            <meshStandardMaterial
+              color="#06b6d4"
+              emissive="#22d3ee"
+              emissiveIntensity={2.5}
+            />
+          </mesh>
+        </group>
+      )}
     </group>
   );
 }

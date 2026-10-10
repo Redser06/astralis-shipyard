@@ -86,6 +86,8 @@ export interface ViewportProps {
   cinematicCut?: CinematicCut;
   assemblyProgress?: number | null;
   isRepairing?: boolean;
+  showDrones?: boolean;
+  showShuttles?: boolean;
 }
 
 function detectWebGL2(): boolean {
@@ -129,6 +131,8 @@ export function Viewport({
   cinematicCut = 'gantry_dolly',
   assemblyProgress,
   isRepairing = false,
+  showDrones = false,
+  showShuttles,
 }: ViewportProps) {
   // Evaluated once on mount rather than during render, so SSR/tests do not
   // touch the DOM unexpectedly.
@@ -164,8 +168,8 @@ export function Viewport({
           onReady={onShipReady}
         />
 
-        <DroneSwarm condition={blueprint.condition} isRepairing={isRepairing} />
-        <ShuttleCraft />
+        <DroneSwarm enabled={showDrones} isRepairing={isRepairing} />
+        <ShuttleCraft enabled={showShuttles ?? environment === 'drydock'} />
 
         {/*
           No PCSS here, deliberately.

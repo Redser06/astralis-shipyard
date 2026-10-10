@@ -129,6 +129,7 @@ export default function App() {
   const [missionTimeScale, setMissionTimeScale] = useState(1.0);
   const [cinematicCut, setCinematicCut] = useState<CinematicCut>('gantry_dolly');
   const [manualCameraControl, setManualCameraControl] = useState(false);
+  const [showDrones, setShowDrones] = useState(false);
 
   // 8-second Procedural Time-Lapse Reconstruction Montage
   const [isAssembling, setIsAssembling] = useState(false);
@@ -150,7 +151,10 @@ export default function App() {
 
       setMissionTelemetry((prev) => {
         const result = stepMission(prev, dt, { timeScale: missionTimeScale });
-        setBlueprint((b) => ({ ...b, condition: result.telemetry.hullIntegrity }));
+        setBlueprint((b) => ({
+          ...b,
+          condition: Math.max(0, Math.min(1, 1.0 - result.telemetry.hullIntegrity)),
+        }));
 
         if (!manualCameraControl) {
           switch (result.telemetry.state) {
@@ -450,7 +454,17 @@ export default function App() {
               cinematicActive={isAssembling || (missionActive && !manualCameraControl)}
               cinematicCut={cinematicCut}
               assemblyProgress={assemblyProgress}
-              isRepairing={missionActive && (missionTelemetry.state === 'repair' || missionTelemetry.state === 'docked')}
+              showDrones={
+                showDrones ||
+                isAssembling ||
+                (missionActive &&
+                  (missionTelemetry.state === 'repair' || missionTelemetry.state === 'docked'))
+              }
+              isRepairing={
+                isAssembling ||
+                (missionActive && missionTelemetry.state === 'repair') ||
+                (showDrones && blueprint.condition > 0.05)
+              }
             />
           </Suspense>
 
@@ -709,6 +723,11 @@ export default function App() {
                   label="RCS thruster quads"
                   checked={protrusions.rcs}
                   onChange={(rcs) => setProtrusions((p) => ({ ...p, rcs }))}
+                />
+                <Toggle
+                  label="Maintenance drones"
+                  checked={showDrones}
+                  onChange={setShowDrones}
                 />
               </div>
             </Panel>

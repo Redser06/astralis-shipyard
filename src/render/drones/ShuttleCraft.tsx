@@ -102,7 +102,7 @@ function evaluateFlightSpline(
   return { pos, tangent };
 }
 
-export function ShuttleCraft() {
+export function ShuttleCraft({ enabled = true }: { enabled?: boolean } = {}) {
   const cargoRef = useRef<Group>(null);
   const tacticalRef = useRef<Group>(null);
   const reducedMotion = useReducedMotion();
@@ -110,7 +110,7 @@ export function ShuttleCraft() {
   const dummyQuat = useRef(new Quaternion());
 
   useFrame((state) => {
-    if (reducedMotion) return;
+    if (reducedMotion || !enabled) return;
     const t = state.clock.elapsedTime;
 
     // Heavy cargo tender on wide outer delivery loop
@@ -139,6 +139,8 @@ export function ShuttleCraft() {
       tacticalRef.current.quaternion.copy(dummyQuat.current);
     }
   });
+
+  if (!enabled) return null;
 
   return (
     <group>

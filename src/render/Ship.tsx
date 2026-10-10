@@ -43,6 +43,7 @@ interface ShipProps {
   mode: RenderMode;
   protrusions: Protrusions;
   burning: boolean;
+  assemblyProgress?: number | null;
   /** Hands the assembled ship group out so it can be exported to .glb. */
   onReady?: (group: Group) => void;
 }
@@ -120,7 +121,14 @@ function HullMarkerLights({
 
 /* --------------------------- Ship --------------------------- */
 
-export function Ship({ blueprint, mode, protrusions, burning, onReady }: ShipProps) {
+export function Ship({
+  blueprint,
+  mode,
+  protrusions,
+  burning,
+  assemblyProgress,
+  onReady,
+}: ShipProps) {
   const groupRef = useRef<Group>(null);
   const reducedMotion = useReducedMotion();
 
@@ -128,11 +136,31 @@ export function Ship({ blueprint, mode, protrusions, burning, onReady }: ShipPro
     if (groupRef.current) onReady?.(groupRef.current);
   }, [onReady]);
 
+  const isAssembling = assemblyProgress !== undefined && assemblyProgress !== null;
+  const progress = isAssembling ? Math.min(1, Math.max(0, assemblyProgress)) : 1;
+
+  // Frame 0-2s (progress < 0.25): Keel wireframe hologram
+  const effectiveMode = isAssembling && progress < 0.25 ? 'wireframe' : mode;
+
+  // Frame 2-4s (progress < 0.5): Core & engines slide in on tracks
+  const coreOffsetZ = isAssembling && progress < 0.5 ? (0.5 - progress) * 16 : 0;
+
+  // Frame 6-8s: Lighting rig snaps from dark to amber to full power
+  const isDerelictShip = isDerelict(blueprint.condition);
+  const lightsDead = isDerelictShip || (isAssembling && progress < 0.75);
+
+  const isInstalled = (socketId: string) => {
+    if (isAssembling && progress < 0.75) {
+      return false;
+    }
+    return blueprint.installedComponents?.[socketId] ?? true;
+  };
+
   const wear = useMemo(
     () => deriveWear(blueprint.condition, blueprint.seed),
     [blueprint.condition, blueprint.seed],
   );
-  const dead = isDerelict(blueprint.condition);
+  const dead = isDerelictShip;
   const materialSpec = useMemo(() => getMaterial(blueprint.material), [blueprint.material]);
   const archetype = useMemo(() => getArchetype(blueprint.architecture), [blueprint.architecture]);
 
@@ -196,7 +224,7 @@ export function Ship({ blueprint, mode, protrusions, burning, onReady }: ShipPro
     <HullMaterial
       spec={materialSpec}
       accentColor={blueprint.accentColor}
-      mode={mode}
+      mode={effectiveMode}
       wear={wear}
     />
   );
@@ -242,64 +270,69 @@ export function Ship({ blueprint, mode, protrusions, burning, onReady }: ShipPro
         />
 
         {sockets.map((socket) => {
+          const retracted = !isInstalled(socket.id);
           switch (socket.kind) {
             case 'engine':
               return (
-                <SocketMount key={socket.id} socket={socket}>
-                  <EngineBell
-                    sublight={blueprint.sublight}
-                    burning={burning}
-                    dead={dead}
-                    reducedMotion={reducedMotion}
-                  />
-                  {/* Starts at the bell's mouth, which now depends on the drive
-                      fitted rather than on a constant that suited one of them. */}
-                  <group position={[0, engineBellLength(blueprint.sublight), 0]}>
-                    <ExhaustPlume
+                <group key={socket.id} position={[0, 0, -coreOffsetZ]}>
+                  <SocketMount socket={socket} retracted={retracted}>
+                    <EngineBell
                       sublight={blueprint.sublight}
-                      burning={burning}
+                      burning={burning && !isAssembling}
                       dead={dead}
-                      seed={blueprint.seed}
-                      mode={mode}
                       reducedMotion={reducedMotion}
                     />
-                  </group>
-                </SocketMount>
+                    {/* Starts at the bell's mouth, which now depends on the drive
+                        fitted rather than on a constant that suited one of them. */}
+                    <group position={[0, engineBellLength(blueprint.sublight), 0]}>
+                      <ExhaustPlume
+                        sublight={blueprint.sublight}
+                        burning={burning && !isAssembling}
+                        dead={dead}
+                        seed={blueprint.seed}
+                        mode={effectiveMode}
+                        reducedMotion={reducedMotion}
+                      />
+                    </group>
+                  </SocketMount>
+                </group>
               );
 
             case 'radiator':
               return protrusions.radiators ? (
-                <SocketMount key={socket.id} socket={socket}>
-                  <Radiator burning={burning} thermalWear={wear.thermal} mode={mode} dead={dead} />
+                <SocketMount key={socket.id} socket={socket} retracted={retracted}>
+                  <Radiator burning={burning} thermalWear={wear.thermal} mode={effectiveMode} dead={dead} />
                 </SocketMount>
               ) : null;
 
             case 'sensor':
               return protrusions.sensors ? (
-                <SocketMount key={socket.id} socket={socket}>
-                  <SensorArray sensor={blueprint.sensors} mode={mode} dead={dead} />
+                <SocketMount key={socket.id} socket={socket} retracted={retracted}>
+                  <SensorArray sensor={blueprint.sensors} mode={effectiveMode} dead={dead} />
                 </SocketMount>
               ) : null;
 
             case 'rcs':
               return protrusions.rcs ? (
-                <SocketMount key={socket.id} socket={socket}>
+                <SocketMount key={socket.id} socket={socket} retracted={retracted}>
                   <RcsQuad />
                 </SocketMount>
               ) : null;
 
             case 'weapon':
               return (
-                <SocketMount key={socket.id} socket={socket}>
-                  <Turret weapon={blueprint.weapons} mode={mode} dead={dead} />
+                <SocketMount key={socket.id} socket={socket} retracted={retracted}>
+                  <Turret weapon={blueprint.weapons} mode={effectiveMode} dead={dead} />
                 </SocketMount>
               );
 
             case 'fuel':
               return (
-                <SocketMount key={socket.id} socket={socket}>
-                  <FuelPod fuel={blueprint.fuel} mode={mode} dead={dead} />
-                </SocketMount>
+                <group key={socket.id} position={[0, 0, -coreOffsetZ * 0.5]}>
+                  <SocketMount socket={socket} retracted={retracted}>
+                    <FuelPod fuel={blueprint.fuel} mode={effectiveMode} dead={dead} />
+                  </SocketMount>
+                </group>
               );
 
             case 'ftl':
@@ -307,10 +340,17 @@ export function Ship({ blueprint, mode, protrusions, burning, onReady }: ShipPro
               // hull rather than protruding from a face, so it takes the socket's
               // position but none of its orientation.
               return (
-                <group key={socket.id} position={socket.position as unknown as [number, number, number]}>
+                <group
+                  key={socket.id}
+                  position={[
+                    socket.position[0],
+                    socket.position[1],
+                    socket.position[2] - coreOffsetZ,
+                  ]}
+                >
                   <FtlCore
                     ftl={blueprint.ftl}
-                    mode={mode}
+                    mode={effectiveMode}
                     dead={dead}
                     ringRadius={archetype.ringRadius}
                     pylonReach={ftlPylonReach(volumes, socket.position[2], archetype.ringRadius * 0.5)}
@@ -328,8 +368,8 @@ export function Ship({ blueprint, mode, protrusions, burning, onReady }: ShipPro
           seed={blueprint.seed}
           accentColor={blueprint.accentColor}
           keepClear={lampZones}
-          dead={dead}
-          mode={mode}
+          dead={lightsDead}
+          mode={effectiveMode}
         />
 
         {/* Glazing, and the exterior lighting rig. Both take the same measured
@@ -342,10 +382,10 @@ export function Ship({ blueprint, mode, protrusions, burning, onReady }: ShipPro
           seed={blueprint.seed}
           wear={wear}
           condition={blueprint.condition}
-          mode={mode}
+          mode={effectiveMode}
         />
 
-        <ExteriorLights rig={lightRig} dead={dead} mode={mode} />
+        <ExteriorLights rig={lightRig} dead={lightsDead} mode={effectiveMode} />
       </group>
     </DamageProvider>
   );

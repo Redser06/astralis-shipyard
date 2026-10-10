@@ -115,6 +115,39 @@ const SOCKETS_BY_ARCHETYPE: Record<ArchetypeId, readonly Socket[]> = {
     { id: 'ftl', kind: 'ftl', position: [0, 0, -1.5], normal: [0, 0, -1], up: [0, 1, 0], size: 'M' },
     { id: 'fuel', kind: 'fuel', position: [1.15, -0.55, -1.0], normal: [1, -0.4, 0], up: [0, 0, 1], size: 'S', mirror: true },
   ],
+
+  starfleet_explorer: [
+    { id: 'eng', kind: 'engine', position: [0, -0.9, -6.0], normal: [0, 0, -1], up: [0, 1, 0], size: 'L' },
+    { id: 'rad', kind: 'radiator', position: [4.2, 0.6, -3.4], normal: [1, 0, 0], up: [0, 1, 0], size: 'M', mirror: true },
+    { id: 'sen', kind: 'sensor', position: [0, 1.25, 4.0], normal: [0, 1, 0], up: [0, 0, 1], size: 'L' },
+    { id: 'wpn', kind: 'weapon', position: [2.0, 1.1, 4.2], normal: [0, 1, 0], up: [0, 0, 1], size: 'M', mirror: true },
+    { id: 'rcs-f', kind: 'rcs', position: [3.8, 0.5, 6.0], normal: [1, 0.2, 0.4], up: [0, 1, 0], size: 'S', mirror: true },
+    { id: 'rcs-a', kind: 'rcs', position: [1.45, -0.9, -4.8], normal: [1, 0, 0], up: [0, 1, 0], size: 'S', mirror: true },
+    { id: 'ftl', kind: 'ftl', position: [0, 0, -1.0], normal: [0, 0, -1], up: [0, 1, 0], size: 'L' },
+    { id: 'fuel', kind: 'fuel', position: [1.45, -0.9, -2.0], normal: [1, 0, 0], up: [0, 0, 1], size: 'M', mirror: true },
+  ],
+
+  delta_strikefighter: [
+    { id: 'eng', kind: 'engine', position: [1.2, 0, -5.0], normal: [0, 0, -1], up: [0, 1, 0], size: 'M', mirror: true },
+    { id: 'rad', kind: 'radiator', position: [1.9, 0, -1.2], normal: [1, 0, 0], up: [0, 0, 1], size: 'S', mirror: true },
+    { id: 'sen', kind: 'sensor', position: [0, 0.4, 4.2], normal: [0, 1, 0], up: [0, 0, 1], size: 'S' },
+    { id: 'wpn', kind: 'weapon', position: [1.6, 0.6, -0.8], normal: [0, 1, 0], up: [0, 0, 1], size: 'S', mirror: true },
+    { id: 'rcs-f', kind: 'rcs', position: [1.2, 0, 3.2], normal: [1, 0.2, 0], up: [0, 1, 0], size: 'S', mirror: true },
+    { id: 'rcs-a', kind: 'rcs', position: [1.8, 0, -3.6], normal: [1, 0.2, 0], up: [0, 1, 0], size: 'S', mirror: true },
+    { id: 'ftl', kind: 'ftl', position: [0, 0, -1.2], normal: [0, 0, -1], up: [0, 1, 0], size: 'S' },
+    { id: 'fuel', kind: 'fuel', position: [1.2, -0.6, -1.8], normal: [0.5, -0.8, 0], up: [0, 0, 1], size: 'S', mirror: true },
+  ],
+
+  deep_space_cruiser: [
+    { id: 'eng', kind: 'engine', position: [0, 0, -7.4], normal: [0, 0, -1], up: [0, 1, 0], size: 'L' },
+    { id: 'rad', kind: 'radiator', position: [1.95, 0, -1.0], normal: [1, 0, 0], up: [0, 0, 1], size: 'L', mirror: true },
+    { id: 'sen', kind: 'sensor', position: [0, 1.4, 7.0], normal: [0, 1, 0], up: [0, 0, 1], size: 'M' },
+    { id: 'wpn', kind: 'weapon', position: [1.4, 1.4, 2.6], normal: [0, 1, 0], up: [0, 0, 1], size: 'L', mirror: true },
+    { id: 'rcs-f', kind: 'rcs', position: [1.4, 0, 6.2], normal: [1, 0, 0], up: [0, 1, 0], size: 'M', mirror: true },
+    { id: 'rcs-a', kind: 'rcs', position: [2.2, 0, -3.8], normal: [1, 0, 0], up: [0, 1, 0], size: 'M', mirror: true },
+    { id: 'ftl', kind: 'ftl', position: [0, 0, -0.5], normal: [0, 0, -1], up: [0, 1, 0], size: 'L' },
+    { id: 'fuel', kind: 'fuel', position: [1.95, -1.0, 1.0], normal: [0.8, -0.6, 0], up: [0, 0, 1], size: 'L', mirror: true },
+  ],
 };
 
 const mirrorX = (v: Vec3): Vec3 => [-v[0], v[1], v[2]];

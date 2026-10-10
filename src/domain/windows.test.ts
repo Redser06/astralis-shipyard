@@ -42,6 +42,9 @@ const ARCHETYPES: ArchetypeId[] = [
   'brutalist_dreadnought',
   'outrigger_science',
   'aerodynamic_sleek',
+  'starfleet_explorer',
+  'delta_strikefighter',
+  'deep_space_cruiser',
 ];
 
 /** A spread wide enough that a rule surviving all of them is not luck. */

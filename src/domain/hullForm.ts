@@ -303,6 +303,163 @@ export const HULL_SOLIDS: Record<ArchetypeId, readonly Solid[]> = {
     // Canopy blister
     { kind: 'sphere', radius: 0.62, position: [0, 0.78, 3.4], segments: [18, 12] },
   ],
+
+  starfleet_explorer: [
+    // Primary saucer hull: flattened elliptical volume + forward prow
+    { kind: 'box', size: [8.0, 1.2, 8.4], position: [0, 0.5, 4.0] },
+    {
+      kind: 'frustum',
+      radiusStart: 4.0,
+      radiusEnd: 1.6,
+      height: 3.2,
+      sides: 16,
+      position: [0, 0.5, 7.8],
+      axis: 'z',
+    },
+    // Dorsal bridge module with navigation dome
+    { kind: 'sphere', radius: 0.85, position: [0, 1.25, 4.0], segments: [18, 12] },
+    // Connecting neck pylon
+    { kind: 'box', size: [0.9, 1.5, 2.6], position: [0, -0.6, 1.2] },
+    // Cylindrical engineering secondary hull
+    { kind: 'capsule', radius: 1.45, length: 7.2, position: [0, -0.9, -2.4], axis: 'z', segments: [4, 12] },
+    // Navigational deflector dish housing
+    {
+      kind: 'frustum',
+      radiusStart: 0.9,
+      radiusEnd: 1.4,
+      height: 1.2,
+      sides: 16,
+      position: [0, -0.9, 1.6],
+      axis: 'z',
+    },
+    // Angled gull-wing nacelle pylons
+    ...[-1, 1].map(
+      (side): BoxSolid => ({
+        kind: 'box',
+        size: [2.6, 0.28, 1.4],
+        position: [side * 2.8, -0.4, -3.4],
+        rotation: [0, 0, side * 0.35],
+        decorative: true,
+      }),
+    ),
+    // Dual outrigger warp nacelles
+    ...[-1, 1].map(
+      (side): CapsuleSolid => ({
+        kind: 'capsule',
+        radius: 0.65,
+        length: 8.4,
+        position: [side * 4.2, 0.6, -3.4],
+        axis: 'z',
+        segments: [4, 12],
+      }),
+    ),
+    // Bussard ramjets at nacelle tips
+    ...[-1, 1].map(
+      (side): SphereSolid => ({
+        kind: 'sphere',
+        radius: 0.72,
+        position: [side * 4.2, 0.6, 1.2],
+        segments: [16, 12],
+      }),
+    ),
+  ],
+
+  delta_strikefighter: [
+    // Sharp triangular nose wedge
+    {
+      kind: 'frustum',
+      radiusStart: 1.9,
+      radiusEnd: 0.2,
+      height: 5.6,
+      sides: 4,
+      position: [0, 0, 3.8],
+      axis: 'z',
+      twist: Math.PI / 4,
+    },
+    // Main wedge body
+    { kind: 'box', size: [3.8, 1.2, 4.8], position: [0, 0, -1.0] },
+    // Dorsal chamfered spine
+    { kind: 'box', size: [1.3, 0.55, 4.0], position: [0, 0.75, 0] },
+    // Recessed cockpit canopy
+    { kind: 'sphere', radius: 0.58, position: [0, 0.75, 0.9], segments: [16, 12] },
+    // Aft engine bank
+    { kind: 'box', size: [3.6, 1.3, 2.0], position: [0, 0, -4.0] },
+    // Articulated quad strike wings (S-foils)
+    ...[-1, 1].map(
+      (side): BoxSolid => ({
+        kind: 'box',
+        size: [3.4, 0.16, 3.0],
+        position: [side * 3.1, 0.55, -2.0],
+        rotation: [0, 0, side * 0.2],
+      }),
+    ),
+    ...[-1, 1].map(
+      (side): BoxSolid => ({
+        kind: 'box',
+        size: [3.4, 0.16, 3.0],
+        position: [side * 3.1, -0.55, -2.0],
+        rotation: [0, 0, -side * 0.2],
+      }),
+    ),
+    // Wingtip blaster cannons
+    ...[-1, 1].map(
+      (side): CapsuleSolid => ({
+        kind: 'capsule',
+        radius: 0.12,
+        length: 2.2,
+        position: [side * 4.8, 0.9, -1.2],
+        axis: 'z',
+        segments: [4, 8],
+      }),
+    ),
+    ...[-1, 1].map(
+      (side): CapsuleSolid => ({
+        kind: 'capsule',
+        radius: 0.12,
+        length: 2.2,
+        position: [side * 4.8, -0.9, -1.2],
+        axis: 'z',
+        segments: [4, 8],
+      }),
+    ),
+  ],
+
+  deep_space_cruiser: [
+    // Forward prow and spinal railgun trench
+    { kind: 'box', size: [2.8, 2.8, 4.4], position: [0, 0, 7.0] },
+    { kind: 'box', size: [0.85, 0.65, 4.8], position: [0, 1.45, 6.8] },
+    // Cylindrical skyscraper stack hull
+    { kind: 'capsule', radius: 1.95, length: 8.6, position: [0, 0, 1.0], axis: 'z', segments: [4, 16] },
+    // Counter-rotating habitation drum
+    {
+      kind: 'frustum',
+      radiusStart: 2.7,
+      radiusEnd: 2.7,
+      height: 3.2,
+      sides: 16,
+      position: [0, 0, 1.0],
+      axis: 'z',
+    },
+    // Aft engineering block & fusion bell housing
+    { kind: 'box', size: [4.4, 2.6, 2.0], position: [0, 0, -3.2] },
+    {
+      kind: 'frustum',
+      radiusStart: 2.8,
+      radiusEnd: 1.95,
+      height: 4.4,
+      sides: 16,
+      position: [0, 0, -5.2],
+      axis: 'z',
+    },
+    // Massive heat radiator wings
+    ...[-1, 1].map(
+      (side): BoxSolid => ({
+        kind: 'box',
+        size: [0.18, 5.6, 5.8],
+        position: [side * 2.6, 0, -1.6],
+      }),
+    ),
+  ],
 };
 
 /**
@@ -954,7 +1111,7 @@ export function runningLightAnchors(
   // fourteen on every archetype now that the floodlights and the glazing have
   // joined the beacons in the exclusion list — measured, not assumed, and a
   // test in `hullForm.test.ts` holds the count at fourteen.
-  for (let i = 0; i < count * 3 && anchors.length < count; i++) {
+  for (let i = 0; i < count * 6 && anchors.length < count; i++) {
     const step = anchors.length;
     const z = minZ + span * ((step + 0.5) / count) + (rng() - 0.5) * (span / count) * 0.6;
     const side = step % 2 === 0 ? 1 : -1;

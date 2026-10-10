@@ -226,6 +226,27 @@ export const FLIGHT_DECKS: Readonly<Record<ArchetypeId, FlightDeckIntent>> = {
     extent: [0.5, 0.19],
     panes: 3,
   },
+  starfleet_explorer: {
+    position: [0, 1.4, 4.4],
+    normal: [0, 0.4, 0.9],
+    up: [0, 1, 0],
+    extent: [0.9, 0.22],
+    panes: 5,
+  },
+  delta_strikefighter: {
+    position: [0, 0.82, 0.85],
+    normal: [0, 0.45, 0.89],
+    up: [0, 0, 1],
+    extent: [0.52, 0.2],
+    panes: 3,
+  },
+  deep_space_cruiser: {
+    position: [0, 1.8, 5.0],
+    normal: [0, 0.3, 0.95],
+    up: [0, 1, 0],
+    extent: [0.95, 0.25],
+    panes: 6,
+  },
 };
 
 /* ------------------------------------------------------------------ */
@@ -462,11 +483,13 @@ export function placeWindows(
       const hit = raycastHull(volumes, add([0, 0, z], scale(outward, REACH)), scale(outward, -1));
       if (!hit) continue;
       if (dot(hit.normal, outward) < FACING) continue;
+      // Apertures must face outward away from the ship's axis, not back into the centreline
+      if (hit.normal[0] * hit.point[0] + hit.normal[1] * hit.point[1] < -0.35) continue;
 
       // Never cut a round hole in something barely wider than the hole. The
       // stealth prow's needle and the airframe's nose cone both fail here.
       const girth = Math.hypot(hit.point[0], hit.point[1]);
-      if (girth < PORTHOLE_RADIUS * 2.2) continue;
+      if (girth < PORTHOLE_RADIUS * 3.0) continue;
 
       const first = testExclusions(hit.point, PORTHOLE_RADIUS, sockets);
       if (first.blocked) continue;

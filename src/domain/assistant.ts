@@ -184,6 +184,9 @@ const HULL_CODES: Record<ArchetypeId, string> = {
   brutalist_dreadnought: 'BC',
   outrigger_science: 'SCI',
   aerodynamic_sleek: 'AR',
+  starfleet_explorer: 'NCC',
+  delta_strikefighter: 'DS',
+  deep_space_cruiser: 'KM',
 };
 
 const NAME_WORDS = [

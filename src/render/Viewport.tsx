@@ -2,7 +2,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { Bloom, EffectComposer, SMAA } from '@react-three/postprocessing';
-import { ACESFilmicToneMapping, PCFSoftShadowMap, Vector3, type Group } from 'three';
+import { ACESFilmicToneMapping, PCFShadowMap, Vector3, type Group } from 'three';
 import type { Blueprint } from '../domain/types';
 import { Ship } from './Ship';
 import { SceneEnvironment } from './environments/Environments';
@@ -13,6 +13,9 @@ import {
   type Protrusions,
 } from './viewportOptions';
 import type { RenderMode } from './materials/renderModes';
+import { DroneSwarm } from './drones/DroneSwarm';
+import { ShuttleCraft } from './drones/ShuttleCraft';
+import { CinematicDirector, type CinematicCut } from './camera/CinematicDirector';
 
 
 /**
@@ -79,6 +82,10 @@ export interface ViewportProps {
   lightIntensity: number;
   cameraPreset: CameraPreset;
   onShipReady?: (group: Group) => void;
+  cinematicActive?: boolean;
+  cinematicCut?: CinematicCut;
+  assemblyProgress?: number | null;
+  isRepairing?: boolean;
 }
 
 function detectWebGL2(): boolean {
@@ -118,6 +125,10 @@ export function Viewport({
   lightIntensity,
   cameraPreset,
   onShipReady,
+  cinematicActive = false,
+  cinematicCut = 'gantry_dolly',
+  assemblyProgress,
+  isRepairing = false,
 }: ViewportProps) {
   // Evaluated once on mount rather than during render, so SSR/tests do not
   // touch the DOM unexpectedly.
@@ -128,7 +139,7 @@ export function Viewport({
 
   return (
     <Canvas
-      shadows={{ type: PCFSoftShadowMap }}
+      shadows={{ type: PCFShadowMap }}
       dpr={[1, 2]}
       camera={{ position: PRESET_POSITIONS.hero, fov: 45, near: 0.1, far: 400 }}
       gl={{
@@ -149,24 +160,67 @@ export function Viewport({
           mode={mode}
           protrusions={protrusions}
           burning={burning}
+          assemblyProgress={assemblyProgress}
           onReady={onShipReady}
         />
 
-        <CameraRig preset={cameraPreset} />
+        <DroneSwarm condition={blueprint.condition} isRepairing={isRepairing} />
+        <ShuttleCraft />
 
-        <OrbitControls
-          makeDefault
-          enableDamping
-          dampingFactor={0.08}
-          minDistance={8}
-          maxDistance={90}
-          // The entire auto-rotate fix. In the prototype these were read once
-          // inside a useEffect(..., []) render loop and could never change;
-          // here they are props, re-read by the controls on every update.
-          autoRotate={autoRotate}
-          autoRotateSpeed={rotationSpeed * 2}
-        />
+        {/*
+          No PCSS here, deliberately.
 
+          three 0.185 deprecated PCFSoftShadowMap and silently substitutes
+          PCFShadowMap, so the obvious upgrade is drei's <SoftShadows>. It does
+          not work on this three: the PCSS chunk it injects calls
+          `unpackRGBAToDepth`, which 0.185 no longer defines, so EVERY
+          MeshStandardMaterial fails to compile and the entire opaque scene
+          disappears — only additive emissives survive, which looks like the
+          ship vanishing rather than like a shader error.
+
+          Revisit when drei ships a fix. Until then PCFShadowMap is what we ask
+          for and what we get — asking for the deprecated constant bought a
+          console warning and the same shadows.
+        */}
+        {cinematicActive ? (
+          <CinematicDirector active={true} cut={cinematicCut} />
+        ) : (
+          <>
+            <CameraRig preset={cameraPreset} />
+            <OrbitControls
+              makeDefault
+              enableDamping
+              dampingFactor={0.08}
+              minDistance={8}
+              maxDistance={90}
+              // The entire auto-rotate fix. In the prototype these were read once
+              // inside a useEffect(..., []) render loop and could never change;
+              // here they are props, re-read by the controls on every update.
+              autoRotate={autoRotate}
+              autoRotateSpeed={rotationSpeed * 2}
+            />
+          </>
+        )}
+
+        {/*
+          No ambient occlusion, and the reason is measured rather than assumed.
+
+          N8AO is an already-installed, unused dependency, and on paper it is the
+          obvious fix for the one thing flat `ambientLight` cannot do — darken a
+          crevice. Wired up and measured on this scene it costs about 3x the
+          frame time (2.09 fps baseline against 0.72-0.88 with the normal pass,
+          under SwiftShader at 1440x900) and returns roughly 1-5% mean luminance
+          change on the hull.
+
+          The payoff is small here because the scene is already dark, largely
+          metallic and lit by IBL, which is exactly the case ambient occlusion
+          flatters least. The cost is not small: CI renders under SwiftShader,
+          and the visual suite is this project's main safety net — tripling frame
+          time pushes it past its timeouts.
+
+          Revisit if the scene gains lighter, more diffuse surfaces, or if the
+          suite moves to hardware rendering.
+        */}
         <EffectComposer enableNormalPass={false}>
           <Bloom
             intensity={mode === 'thermal' ? 1.1 : 0.55}

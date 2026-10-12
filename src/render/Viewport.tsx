@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { Bloom, EffectComposer, SMAA } from '@react-three/postprocessing';
 import { ACESFilmicToneMapping, PCFShadowMap, Vector3, type Group } from 'three';
-import type { Blueprint } from '../domain/types';
+import type { Blueprint, MissionState } from '../domain/types';
 import { Ship } from './Ship';
 import { SceneEnvironment } from './environments/Environments';
 import {
@@ -86,6 +86,9 @@ export interface ViewportProps {
   cinematicCut?: CinematicCut;
   assemblyProgress?: number | null;
   isRepairing?: boolean;
+  showDrones?: boolean;
+  showShuttles?: boolean;
+  missionState?: MissionState | null;
 }
 
 function detectWebGL2(): boolean {
@@ -129,6 +132,9 @@ export function Viewport({
   cinematicCut = 'gantry_dolly',
   assemblyProgress,
   isRepairing = false,
+  showDrones = false,
+  showShuttles,
+  missionState,
 }: ViewportProps) {
   // Evaluated once on mount rather than during render, so SSR/tests do not
   // touch the DOM unexpectedly.
@@ -161,11 +167,12 @@ export function Viewport({
           protrusions={protrusions}
           burning={burning}
           assemblyProgress={assemblyProgress}
+          missionState={missionState}
           onReady={onShipReady}
         />
 
-        <DroneSwarm condition={blueprint.condition} isRepairing={isRepairing} />
-        <ShuttleCraft />
+        <DroneSwarm enabled={showDrones} isRepairing={isRepairing} />
+        <ShuttleCraft enabled={showShuttles ?? environment === 'drydock'} />
 
         {/*
           No PCSS here, deliberately.

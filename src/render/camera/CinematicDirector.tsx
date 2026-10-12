@@ -28,14 +28,14 @@ export function CinematicDirector({ active, cut }: CinematicDirectorProps) {
 
     switch (cut) {
       case 'gantry_dolly': {
-        // Slow low-angle pan tracking along the hull plates under the searchlights
-        const dollyProgress = (t * 0.12) % 1.0;
-        const z = -14 + dollyProgress * 26;
-        const x = -11 + Math.sin(t * 0.25) * 2;
-        const y = -1.5 + Math.cos(t * 0.2) * 2.5;
+        // Continuous sinusoidal ping-pong dolly tracking along hull — eliminates modulo snap
+        const dollyPhase = Math.sin(t * 0.18);
+        const z = dollyPhase * 11;
+        const x = -10.5 + Math.cos(t * 0.22) * 1.5;
+        const y = -1.2 + Math.sin(t * 0.3) * 1.8;
 
         targetCamPos.current.set(x, y, z);
-        targetLookAt.current.set(0, 0.5, z + 4);
+        targetLookAt.current.set(0, 0.2, z * 0.7);
         break;
       }
 
@@ -50,22 +50,25 @@ export function CinematicDirector({ active, cut }: CinematicDirectorProps) {
       }
 
       case 'turret_ots': {
-        // Over-the-shoulder dorsal deck perspective tracking outward scan vectors
-        const scanAngle = t * 0.6;
-        targetCamPos.current.set(2.2, 3.4, 1.8);
-        targetLookAt.current.set(
-          Math.sin(scanAngle) * 24,
-          2.0 + Math.sin(t * 1.2) * 4,
-          Math.cos(scanAngle) * 24,
-        );
+        // Over-the-shoulder starboard dorsal view looking ALONG forward firing cone
+        targetCamPos.current.set(2.4, 2.2, 1.2);
+        // Target vector points forward along ship axis with subtle simulated targeting drift
+        const leadJitterX = Math.sin(t * 1.8) * 1.5;
+        const leadJitterY = Math.cos(t * 2.2) * 0.8;
+        targetLookAt.current.set(leadJitterX, 0.8 + leadJitterY, 28);
         break;
       }
 
       case 'flyby_pass': {
-        // Stationary deep-space camera framing orbital sweep
-        targetCamPos.current.set(13.5, 4.5, 6.0);
-        const shipZ = Math.sin(t * 0.4) * 12;
-        targetLookAt.current.set(0, 0, shipZ);
+        // Sweeping diagonal orbital pass tracking the ship's center of mass
+        const sweepAngle = t * 0.25;
+        targetCamPos.current.set(
+          Math.cos(sweepAngle) * 18,
+          4.5 + Math.sin(t * 0.15) * 2,
+          Math.sin(sweepAngle) * 18,
+        );
+        // Always lock focal center to the ship origin with subtle forward anticipation
+        targetLookAt.current.set(0, 0.4, 0);
         break;
       }
     }

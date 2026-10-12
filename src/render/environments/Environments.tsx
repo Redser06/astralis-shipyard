@@ -119,6 +119,200 @@ function WeldingSparks() {
   );
 }
 
+function CradleRib({ z }: { z: number }) {
+  return (
+    <group position={[0, 0, z]}>
+      {/* Port Vertical Gantry Column */}
+      <mesh position={[-18, 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[1.4, 20, 1.4]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.7} metalness={0.7} />
+      </mesh>
+      {/* Starboard Vertical Gantry Column */}
+      <mesh position={[18, 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[1.4, 20, 1.4]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.7} metalness={0.7} />
+      </mesh>
+      {/* Lower Keel Cradle Transverse Beam */}
+      <mesh position={[0, -8, 0]} castShadow receiveShadow>
+        <boxGeometry args={[36, 1.4, 1.4]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.7} metalness={0.7} />
+      </mesh>
+      {/* Lower Hazard Caution Plate */}
+      <mesh position={[0, -7.2, 0]}>
+        <boxGeometry args={[34, 0.1, 0.6]} />
+        <meshStandardMaterial color="#f59e0b" roughness={0.4} metalness={0.3} />
+      </mesh>
+      {/* Upper Overhead Gantry Arch Beam */}
+      <mesh position={[0, 12, 0]} castShadow receiveShadow>
+        <boxGeometry args={[36, 1.4, 1.4]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.7} metalness={0.7} />
+      </mesh>
+      {/* Upper Hazard Caution Plate */}
+      <mesh position={[0, 11.2, 0]}>
+        <boxGeometry args={[34, 0.1, 0.6]} />
+        <meshStandardMaterial color="#f59e0b" roughness={0.4} metalness={0.3} />
+      </mesh>
+      {/* Diagonal Corner Gussets */}
+      {[-1, 1].map((dirX) => (
+        <group key={`gusset-${dirX}`}>
+          <mesh position={[dirX * 15, 9, 0]} rotation={[0, 0, (dirX * -Math.PI) / 4]}>
+            <boxGeometry args={[4.5, 0.8, 0.8]} />
+            <meshStandardMaterial color="#334155" roughness={0.6} metalness={0.8} />
+          </mesh>
+          <mesh position={[dirX * 15, -5, 0]} rotation={[0, 0, (dirX * Math.PI) / 4]}>
+            <boxGeometry args={[4.5, 0.8, 0.8]} />
+            <meshStandardMaterial color="#334155" roughness={0.6} metalness={0.8} />
+          </mesh>
+        </group>
+      ))}
+      {/* Port Red Clearance Strobe */}
+      <mesh position={[-18.8, 12, 0]}>
+        <sphereGeometry args={[0.2, 8, 8]} />
+        <meshStandardMaterial color="#ef4444" emissive="#ef4444" emissiveIntensity={3.5} toneMapped={false} />
+      </mesh>
+      {/* Starboard Green Clearance Strobe */}
+      <mesh position={[18.8, 12, 0]}>
+        <sphereGeometry args={[0.2, 8, 8]} />
+        <meshStandardMaterial color="#10b981" emissive="#10b981" emissiveIntensity={3.5} toneMapped={false} />
+      </mesh>
+    </group>
+  );
+}
+
+function ServiceGantryArm({ side, y, z }: { side: 'port' | 'stbd'; y: number; z: number }) {
+  const isPort = side === 'port';
+  const rootX = isPort ? -18 : 18;
+  const reachDir = isPort ? 1 : -1;
+
+  return (
+    <group position={[rootX, y, z]}>
+      {/* Hydraulic Mounting Barbette Base */}
+      <mesh castShadow>
+        <cylinderGeometry args={[0.8, 0.9, 1.2, 10]} />
+        <meshStandardMaterial color="#0f172a" roughness={0.4} metalness={0.9} />
+      </mesh>
+      {/* Cantilever Gantry Truss Arm extending inward */}
+      <mesh position={[reachDir * 4.8, 0, 0]} castShadow receiveShadow>
+        <boxGeometry args={[9.2, 0.5, 1.4]} />
+        <meshStandardMaterial color="#334155" roughness={0.6} metalness={0.8} />
+      </mesh>
+      {/* Walkway Surface with Perforated Grate Texture */}
+      <mesh position={[reachDir * 4.8, 0.3, 0]}>
+        <boxGeometry args={[9.0, 0.08, 0.9]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.9} metalness={0.4} />
+      </mesh>
+      {/* Safety Handrail Stanchions */}
+      {[-0.55, 0.55].map((railZ) => (
+        <mesh key={railZ} position={[reachDir * 4.8, 0.7, railZ]}>
+          <boxGeometry args={[9.0, 0.04, 0.04]} />
+          <meshStandardMaterial color="#f59e0b" roughness={0.4} metalness={0.5} />
+        </mesh>
+      ))}
+      {/* Magnetic Clamping Head / Fuel Umbilical Nozzle at Tip */}
+      <group position={[reachDir * 9.5, -0.3, 0]}>
+        <mesh castShadow>
+          <cylinderGeometry args={[0.4, 0.5, 0.9, 10]} />
+          <meshStandardMaterial color="#0f172a" roughness={0.3} metalness={0.9} />
+        </mesh>
+        {/* Cyan Status Indicator Ring */}
+        <mesh position={[0, -0.45, 0]}>
+          <cylinderGeometry args={[0.3, 0.3, 0.1, 10]} />
+          <meshStandardMaterial color="#06b6d4" emissive="#06b6d4" emissiveIntensity={3.5} toneMapped={false} />
+        </mesh>
+        {/* Pulsing Work Beacon */}
+        <mesh position={[0, 0.55, 0]}>
+          <sphereGeometry args={[0.12, 8, 8]} />
+          <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={3.0} toneMapped={false} />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
+function HabitationRing() {
+  return (
+    <group position={[0, 16.5, 0]}>
+      {/* Toroidal Pressurized Station Habitation Habitat Ring */}
+      <mesh rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
+        <torusGeometry args={[13, 1.8, 12, 32]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.5} metalness={0.8} />
+      </mesh>
+      {/* Glowing Observation Viewport Bands */}
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[13, 1.84, 6, 32]} />
+        <meshStandardMaterial
+          color="#38bdf8"
+          emissive="#38bdf8"
+          emissiveIntensity={1.8}
+          roughness={0.2}
+          metalness={0.9}
+        />
+      </mesh>
+      {/* 4 Radial Structural Spokes connecting Habitat Torus to Central Spine */}
+      {[0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2].map((angle, idx) => (
+        <mesh key={`spoke-${idx}`} rotation={[0, angle, 0]} position={[0, 0, 0]}>
+          <cylinderGeometry args={[0.45, 0.45, 24, 8]} />
+          <meshStandardMaterial color="#334155" roughness={0.6} metalness={0.8} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function OperationsControlTower() {
+  const radarRef = useRef<Group>(null);
+  const reducedMotion = useReducedMotion();
+
+  useFrame((state) => {
+    if (reducedMotion || !radarRef.current) return;
+    radarRef.current.rotation.y = state.clock.elapsedTime * 0.8;
+  });
+
+  return (
+    <group position={[0, 18, -14]}>
+      {/* Traffic Operations Support Column */}
+      <mesh castShadow receiveShadow>
+        <cylinderGeometry args={[2.2, 2.8, 8, 8]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.6} metalness={0.8} />
+      </mesh>
+      {/* Multi-Faceted Panoramic Observation Cupola */}
+      <mesh position={[0, 4.2, 0]} castShadow>
+        <cylinderGeometry args={[3.8, 2.5, 2.4, 8]} />
+        <meshStandardMaterial color="#0f172a" roughness={0.3} metalness={0.9} />
+      </mesh>
+      {/* Observation Glass Windows Band */}
+      <mesh position={[0, 4.4, 0]}>
+        <cylinderGeometry args={[3.85, 3.2, 1.1, 8]} />
+        <meshStandardMaterial
+          color="#38bdf8"
+          emissive="#0284c7"
+          emissiveIntensity={2.5}
+          roughness={0.1}
+          metalness={0.95}
+        />
+      </mesh>
+      {/* Elevated Communications Mast Needle */}
+      <mesh position={[0, 8.5, 0]}>
+        <cylinderGeometry args={[0.08, 0.22, 6.5, 8]} />
+        <meshStandardMaterial color="#475569" roughness={0.4} metalness={0.9} />
+      </mesh>
+      {/* Red Obstruction Beacon at Mast Tip */}
+      <mesh position={[0, 11.8, 0]}>
+        <sphereGeometry args={[0.18, 8, 8]} />
+        <meshStandardMaterial color="#ef4444" emissive="#ef4444" emissiveIntensity={5.0} toneMapped={false} />
+        <pointLight color="#ef4444" intensity={3} distance={10} />
+      </mesh>
+      {/* Rotating Primary Orbital Radar Dish */}
+      <group ref={radarRef} position={[1.4, 6.2, 1.2]}>
+        <mesh rotation={[0.4, 0, 0]}>
+          <cylinderGeometry args={[1.5, 0.1, 0.4, 16]} />
+          <meshStandardMaterial color="#f59e0b" roughness={0.3} metalness={0.8} />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
 function Drydock() {
   const gantryRef = useRef<Group>(null);
   const reducedMotion = useReducedMotion();
@@ -126,40 +320,66 @@ function Drydock() {
   useFrame((state) => {
     if (reducedMotion) return;
     if (gantryRef.current) {
-      gantryRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.4) * 0.08;
+      gantryRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.2) * 0.02;
     }
   });
 
   return (
     <group>
       <group ref={gantryRef}>
-        {[-19, 19].map((x) => (
-          <group key={x} position={[x, 0, 0]}>
-            <mesh castShadow receiveShadow>
-              <boxGeometry args={[1.2, 18, 1.2]} />
-              <meshStandardMaterial color="#1e293b" roughness={0.8} metalness={0.6} />
-            </mesh>
-            {[-5, 0, 5].map((z) => (
-              <mesh key={z} position={[0, 4, z]} castShadow>
-                <boxGeometry args={[0.5, 0.5, 3]} />
-                <meshStandardMaterial color="#334155" roughness={0.7} metalness={0.7} />
-              </mesh>
-            ))}
+        {/* 4 Octagonal Structural Berth Cradle Rings */}
+        {[-18, -6, 6, 18].map((z) => (
+          <CradleRib key={`rib-${z}`} z={z} />
+        ))}
+
+        {/* 4 Longitudinal Heavy Box Spine Trusses linking the rings */}
+        <mesh position={[-18, 12, 0]} castShadow receiveShadow>
+          <boxGeometry args={[1.2, 1.2, 44]} />
+          <meshStandardMaterial color="#1e293b" roughness={0.7} metalness={0.7} />
+        </mesh>
+        <mesh position={[18, 12, 0]} castShadow receiveShadow>
+          <boxGeometry args={[1.2, 1.2, 44]} />
+          <meshStandardMaterial color="#1e293b" roughness={0.7} metalness={0.7} />
+        </mesh>
+        <mesh position={[-18, -8, 0]} castShadow receiveShadow>
+          <boxGeometry args={[1.2, 1.2, 44]} />
+          <meshStandardMaterial color="#1e293b" roughness={0.7} metalness={0.7} />
+        </mesh>
+        <mesh position={[18, -8, 0]} castShadow receiveShadow>
+          <boxGeometry args={[1.2, 1.2, 44]} />
+          <meshStandardMaterial color="#1e293b" roughness={0.7} metalness={0.7} />
+        </mesh>
+
+        {/* 6 Articulated Hydraulic Service Gantry Arms (Port & Starboard pairs) */}
+        {[-12, 0, 12].map((z) => (
+          <group key={`gantry-pair-${z}`}>
+            <ServiceGantryArm side="port" y={2} z={z} />
+            <ServiceGantryArm side="stbd" y={2} z={z} />
           </group>
         ))}
-        {/* Overhead spine */}
-        <mesh position={[0, 9, 0]} castShadow>
-          <boxGeometry args={[38, 0.8, 0.8]} />
-          <meshStandardMaterial color="#1e293b" roughness={0.8} metalness={0.6} />
-        </mesh>
+
+        {/* Overhead Pressurized Station Habitation Habitat Ring */}
+        <HabitationRing />
+
+        {/* Elevated Traffic Control & Operations Cupola */}
+        <OperationsControlTower />
       </group>
+
       <WeldingSparks />
       <DrydockLighting intensity={1.0} />
-      {/* Deck plate — gives the shadows something to land on */}
+
+      {/* Heavy Modular Slipway Deck Floor with Berth Boundary Guide Rails */}
       <mesh position={[0, -11, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[80, 80]} />
+        <planeGeometry args={[90, 90]} />
         <meshStandardMaterial color="#070b14" roughness={0.98} metalness={0.1} />
       </mesh>
+      {/* Illuminated Berth Guide Lines */}
+      {[-9, 9].map((lineX) => (
+        <mesh key={`guide-${lineX}`} position={[lineX, -10.95, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[0.3, 44]} />
+          <meshStandardMaterial color="#06b6d4" emissive="#06b6d4" emissiveIntensity={2.5} toneMapped={false} />
+        </mesh>
+      ))}
     </group>
   );
 }

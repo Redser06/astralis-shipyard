@@ -95,7 +95,7 @@ function Mark({ mark, offset }: { mark: DamageMark; offset?: Vec3 }) {
   const isEmergencyBreach = mark.kind === 'breach' && (state?.wear.structural ?? 0) > 0.40;
 
   return (
-    <group>
+    <>
       <Decal
         position={position}
         rotation={rotation}
@@ -136,7 +136,7 @@ function Mark({ mark, offset }: { mark: DamageMark; offset?: Vec3 }) {
           />
         </Decal>
       )}
-    </group>
+    </>
   );
 }
 

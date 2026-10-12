@@ -2,61 +2,85 @@ import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import {
   AdditiveBlending,
-  Euler,
   Group,
-  InstancedMesh,
-  Matrix4,
-  Quaternion,
+  Points,
+  SpotLight as ThreeSpotLight,
   Vector3,
-  type Points,
 } from 'three';
 import { mulberry32 } from '../../domain/rng';
 import { useReducedMotion } from '../useReducedMotion';
 
-const DRONE_COUNT = 18;
-
-interface DroneState {
-  baseAngle: number;
+interface DroneSpec {
+  id: string;
+  station: [number, number, number];
+  targetHull: [number, number, number];
   speed: number;
-  radius: number;
-  height: number;
-  zOffset: number;
-  currentPos: Vector3;
-  targetPos: Vector3;
-  targetNormal: Vector3;
-  repairTarget: Vector3;
+  phase: number;
 }
 
+const DRONE_SPECS: readonly DroneSpec[] = [
+  { id: 'drone-port-bow', station: [-6.8, 1.6, 5.0], targetHull: [-2.2, 0.4, 4.0], speed: 0.6, phase: 0.0 },
+  { id: 'drone-stbd-bow', station: [6.8, 1.6, 5.0], targetHull: [2.2, 0.4, 4.0], speed: 0.55, phase: 1.5 },
+  { id: 'drone-dorsal-mid', station: [0.0, 5.8, 0.5], targetHull: [0.0, 1.8, 0.2], speed: 0.7, phase: 3.0 },
+  { id: 'drone-port-aft', station: [-7.2, 1.0, -6.5], targetHull: [-2.8, 0.2, -5.5], speed: 0.65, phase: 4.2 },
+  { id: 'drone-stbd-aft', station: [7.2, 1.0, -6.5], targetHull: [2.8, 0.2, -5.5], speed: 0.5, phase: 5.5 },
+];
+
 /**
- * Procedural electric weld sparks emitted during repair mode.
+ * Realistic golden-white electric welding sparks falling with gravity.
  */
-function WeldSparks({ active }: { active: boolean }) {
+function ElectricWeldSparks({
+  origin,
+  active,
+}: {
+  origin: Vector3;
+  active: boolean;
+}) {
   const pointsRef = useRef<Points>(null);
-  const sparkCount = 60;
+  const sparkCount = 36;
   const reducedMotion = useReducedMotion();
 
-  const positions = useMemo(() => {
-    const array = new Float32Array(sparkCount * 3);
-    const rng = mulberry32(0x9a41b2);
+  const [positions, velocities] = useMemo(() => {
+    const pos = new Float32Array(sparkCount * 3);
+    const vel = new Float32Array(sparkCount * 3);
+    const rng = mulberry32(0x8a21d4);
+
     for (let i = 0; i < sparkCount; i++) {
-      array[i * 3] = (rng() - 0.5) * 4;
-      array[i * 3 + 1] = (rng() - 0.5) * 2;
-      array[i * 3 + 2] = (rng() - 0.5) * 8;
+      const idx = i * 3;
+      pos[idx] = origin.x;
+      pos[idx + 1] = origin.y;
+      pos[idx + 2] = origin.z;
+
+      vel[idx] = (rng() - 0.5) * 2.2;
+      vel[idx + 1] = 0.5 + rng() * 1.5;
+      vel[idx + 2] = (rng() - 0.5) * 2.2;
     }
-    return array;
-  }, []);
+    return [pos, vel];
+  }, [origin]);
 
   useFrame((_, delta) => {
     if (!pointsRef.current || !active || reducedMotion) return;
     const attr = pointsRef.current.geometry.getAttribute('position');
-    const arr = attr.array as Float32Array;
+    const posArr = attr.array as Float32Array;
+
     for (let i = 0; i < sparkCount; i++) {
       const idx = i * 3;
-      arr[idx + 1] -= delta * 3.5;
-      if (arr[idx + 1] < -1.5) {
-        arr[idx] = (Math.random() - 0.5) * 3;
-        arr[idx + 1] = 0.5 + Math.random() * 0.8;
-        arr[idx + 2] = (Math.random() - 0.5) * 6;
+      posArr[idx] += velocities[idx]! * delta;
+      posArr[idx + 1] += velocities[idx + 1]! * delta;
+      posArr[idx + 2] += velocities[idx + 2]! * delta;
+
+      // Gravity pull
+      velocities[idx + 1]! -= delta * 5.0;
+
+      // Reset when spark drops below floor
+      if (posArr[idx + 1]! < origin.y - 1.8) {
+        posArr[idx] = origin.x + (Math.random() - 0.5) * 0.1;
+        posArr[idx + 1] = origin.y + (Math.random() - 0.5) * 0.1;
+        posArr[idx + 2] = origin.z + (Math.random() - 0.5) * 0.1;
+
+        velocities[idx] = (Math.random() - 0.5) * 2.5;
+        velocities[idx + 1] = 0.8 + Math.random() * 1.8;
+        velocities[idx + 2] = (Math.random() - 0.5) * 2.5;
       }
     }
     attr.needsUpdate = true;
@@ -70,10 +94,10 @@ function WeldSparks({ active }: { active: boolean }) {
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
       <pointsMaterial
-        color="#38bdf8"
-        size={0.12}
+        color="#fbbf24"
+        size={0.08}
         transparent
-        opacity={0.95}
+        opacity={0.9}
         blending={AdditiveBlending}
         depthWrite={false}
         toneMapped={false}
@@ -83,182 +107,212 @@ function WeldSparks({ active }: { active: boolean }) {
 }
 
 /**
- * Laser welding beam lines drawn from drones to hull target spots.
+ * High-fidelity industrial maintenance drone vehicle:
+ * Features dark composite avionics chassis, aviation yellow hazard stripes,
+ * dual outrigger thruster pods, forward work spotlight, and articulated tool head.
  */
-function LaserWeldingArcs({
-  dronePositions,
-  active,
+function IndustrialMaintenanceDrone({
+  spec,
+  isRepairing,
 }: {
-  dronePositions: Vector3[];
-  active: boolean;
+  spec: DroneSpec;
+  isRepairing: boolean;
 }) {
+  const groupRef = useRef<Group>(null);
+  const spotRef = useRef<ThreeSpotLight>(null);
+  const beaconRef = useRef<Group>(null);
+  const targetObjRef = useRef<Group>(null);
   const reducedMotion = useReducedMotion();
-  const lineGroupRef = useRef<Group>(null);
 
-  useFrame((state) => {
-    if (reducedMotion || !active || !lineGroupRef.current) return;
-    // Jitter opacity slightly for electric welding flicker
-    const flicker = 0.75 + Math.sin(state.clock.elapsedTime * 45) * 0.25;
-    lineGroupRef.current.children.forEach((child) => {
-      const mesh = child as unknown as { material?: { opacity?: number } };
-      if (mesh.material && typeof mesh.material.opacity === 'number') {
-        mesh.material.opacity = flicker;
+  const baseStation = useMemo(() => new Vector3(...spec.station), [spec.station]);
+  const hullContact = useMemo(() => new Vector3(...spec.targetHull), [spec.targetHull]);
+
+  useFrame((state, delta) => {
+    if (!groupRef.current) return;
+    const t = state.clock.elapsedTime + spec.phase;
+
+    if (!reducedMotion) {
+      // Smooth methodical station hovering
+      const driftX = Math.sin(t * spec.speed) * 0.35;
+      const driftY = Math.cos(t * spec.speed * 0.8) * 0.25;
+      const driftZ = Math.sin(t * spec.speed * 0.6) * 0.3;
+
+      const targetPos = baseStation.clone().add(new Vector3(driftX, driftY, driftZ));
+      groupRef.current.position.lerp(targetPos, 1 - Math.pow(0.01, delta));
+
+      // Always orient tool head towards target hull work area
+      groupRef.current.lookAt(hullContact);
+
+      // Flashing navigation beacon (1.0 Hz aviation amber)
+      if (beaconRef.current) {
+        beaconRef.current.visible = Math.floor(t * 2) % 2 === 0;
       }
-    });
+    }
+
+    if (spotRef.current && targetObjRef.current) {
+      targetObjRef.current.position.copy(hullContact);
+      spotRef.current.target = targetObjRef.current;
+    }
   });
 
-  if (!active) return null;
-
   return (
-    <group ref={lineGroupRef}>
-      {dronePositions.slice(0, 8).map((pos, i) => {
-        // Target is closer to hull center
-        const target = new Vector3(pos.x * 0.25, pos.y * 0.25, pos.z);
-        const mid = pos.clone().lerp(target, 0.5);
-        const dist = pos.distanceTo(target);
+    <group>
+      <group ref={groupRef} position={spec.station}>
+        {/* Main Avionics Chassis (Heavy Fleet Graphite Composite) */}
+        <mesh castShadow receiveShadow>
+          <boxGeometry args={[1.8, 0.75, 2.2]} />
+          <meshStandardMaterial color="#1e293b" roughness={0.4} metalness={0.7} />
+        </mesh>
 
-        return (
-          <group key={i}>
-            <mesh
-              position={[mid.x, mid.y, mid.z]}
-              onUpdate={(self) => {
-                self.lookAt(target);
-              }}
-            >
-              <cylinderGeometry args={[0.02, 0.02, dist, 4]} />
-              <meshBasicMaterial
-                color="#f8fafc"
-                transparent
-                opacity={0.9}
-                blending={AdditiveBlending}
-                toneMapped={false}
-              />
+        {/* High-Visibility Aviation Yellow Hazard Identification Plate */}
+        <mesh position={[0, 0.39, 0]}>
+          <boxGeometry args={[1.82, 0.06, 1.2]} />
+          <meshStandardMaterial color="#f59e0b" roughness={0.5} metalness={0.3} />
+        </mesh>
+
+        {/* Chamfered Heavy Nose Cap */}
+        <mesh position={[0, 0, 1.25]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+          <cylinderGeometry args={[0.55, 0.8, 0.5, 6]} />
+          <meshStandardMaterial color="#0f172a" roughness={0.3} metalness={0.8} />
+        </mesh>
+
+        {/* Forward Primary Sensor Eye Dome */}
+        <mesh position={[0, 0.18, 1.55]}>
+          <sphereGeometry args={[0.22, 14, 12]} />
+          <meshStandardMaterial color="#0284c7" roughness={0.1} metalness={0.9} />
+        </mesh>
+
+        {/* Flashing Amber Navigation Strobe */}
+        <group ref={beaconRef} position={[0, 0.48, -0.7]}>
+          <mesh>
+            <sphereGeometry args={[0.1, 8, 8]} />
+            <meshStandardMaterial
+              color="#fbbf24"
+              emissive="#fbbf24"
+              emissiveIntensity={3.0}
+              toneMapped={false}
+            />
+          </mesh>
+          <pointLight color="#fbbf24" intensity={4} distance={8} />
+        </group>
+
+        {/* Outrigger Thruster Pods (Port & Starboard) */}
+        {[-1.15, 1.15].map((x, i) => (
+          <group key={`thruster-${i}`} position={[x, 0, -0.2]}>
+            {/* Structural Strut Bracket */}
+            <mesh>
+              <boxGeometry args={[0.45, 0.18, 0.5]} />
+              <meshStandardMaterial color="#334155" roughness={0.6} metalness={0.8} />
             </mesh>
-            {/* Lidar/Laser impact spark hot spot on hull */}
-            <mesh position={[target.x, target.y, target.z]}>
-              <sphereGeometry args={[0.09, 8, 8]} />
-              <meshBasicMaterial
-                color="#38bdf8"
-                transparent
-                opacity={0.95}
-                blending={AdditiveBlending}
+            {/* Heavy Thruster Nacelle */}
+            <mesh position={[x > 0 ? 0.2 : -0.2, 0, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+              <cylinderGeometry args={[0.26, 0.3, 1.2, 12]} />
+              <meshStandardMaterial color="#0f172a" roughness={0.4} metalness={0.9} />
+            </mesh>
+            {/* Rear Micro-RCS Nozzle */}
+            <mesh position={[x > 0 ? 0.2 : -0.2, 0, -0.65]} rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[0.14, 0.22, 0.18, 8]} />
+              <meshStandardMaterial color="#475569" roughness={0.3} metalness={0.9} />
+            </mesh>
+            {/* Cyan Plasma Exhaust Halo */}
+            <mesh position={[x > 0 ? 0.2 : -0.2, 0, -0.75]} rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[0.12, 0.18, 0.12, 10]} />
+              <meshStandardMaterial
+                color="#06b6d4"
+                emissive="#06b6d4"
+                emissiveIntensity={4.0}
                 toneMapped={false}
               />
             </mesh>
           </group>
-        );
-      })}
+        ))}
+
+        {/* Articulated Forward Welding Manipulator Arm */}
+        <group position={[0, -0.32, 1.1]}>
+          <mesh rotation={[0.2, 0, 0]} castShadow>
+            <cylinderGeometry args={[0.07, 0.08, 0.9, 8]} />
+            <meshStandardMaterial color="#475569" roughness={0.5} metalness={0.8} />
+          </mesh>
+          {/* Heavy Torch Nozzle Tip */}
+          <mesh position={[0, -0.32, 0.42]} rotation={[0.4, 0, 0]}>
+            <cylinderGeometry args={[0.04, 0.07, 0.32, 8]} />
+            <meshStandardMaterial color="#0f172a" roughness={0.3} metalness={0.9} />
+          </mesh>
+        </group>
+
+        {/* High-Intensity Volumetric Industrial Work Spotlight */}
+        <spotLight
+          ref={spotRef}
+          color="#fef3c7"
+          intensity={isRepairing ? 28 : 12}
+          angle={Math.PI / 6}
+          penumbra={0.4}
+          distance={30}
+          castShadow
+        />
+      </group>
+
+      {/* Target object in space towards hull */}
+      <group ref={targetObjRef} position={spec.targetHull} />
+
+      {/* Active Welding Arc & Falling Sparks (ONLY when actively repairing) */}
+      {isRepairing && (
+        <group>
+          {/* Electric Welding Torch Beam connecting drone tip to hull plate */}
+          <mesh
+            position={[
+              (spec.station[0] + spec.targetHull[0]) * 0.5,
+              (spec.station[1] + spec.targetHull[1]) * 0.5,
+              (spec.station[2] + spec.targetHull[2]) * 0.5,
+            ]}
+            onUpdate={(self) => {
+              self.lookAt(hullContact);
+            }}
+          >
+            <cylinderGeometry
+              args={[
+                0.015,
+                0.015,
+                baseStation.distanceTo(hullContact) * 0.85,
+                4,
+              ]}
+            />
+            <meshBasicMaterial
+              color="#ffffff"
+              transparent
+              opacity={0.85}
+              blending={AdditiveBlending}
+              toneMapped={false}
+            />
+          </mesh>
+
+          {/* Falling golden sparks from contact point */}
+          <ElectricWeldSparks origin={hullContact} active={isRepairing} />
+        </group>
+      )}
     </group>
   );
 }
 
 export function DroneSwarm({
-  condition = 1.0,
+  enabled = false,
   isRepairing = false,
 }: {
-  condition?: number;
+  enabled?: boolean;
   isRepairing?: boolean;
 }) {
-  const instancedRef = useRef<InstancedMesh>(null);
-  const reducedMotion = useReducedMotion();
-  const needsRepair = condition < 0.98 || isRepairing;
-
-  const drones = useMemo<DroneState[]>(() => {
-    const rng = mulberry32(0x4a88bc);
-    return Array.from({ length: DRONE_COUNT }, (_, i) => {
-      const angle = (i / DRONE_COUNT) * Math.PI * 2;
-      return {
-        baseAngle: angle,
-        speed: 0.35 + rng() * 0.45,
-        radius: 4.5 + rng() * 2.2,
-        height: (rng() - 0.5) * 4.0,
-        zOffset: (rng() - 0.5) * 14.0,
-        currentPos: new Vector3(
-          Math.cos(angle) * (4.5 + rng() * 2),
-          (rng() - 0.5) * 4.0,
-          (rng() - 0.5) * 14.0,
-        ),
-        targetPos: new Vector3(),
-        targetNormal: new Vector3(0, 1, 0),
-        repairTarget: new Vector3((rng() - 0.5) * 3, (rng() - 0.5) * 1.5, (rng() - 0.5) * 10),
-      };
-    });
-  }, []);
-
-  const dummyMatrix = useMemo(() => new Matrix4(), []);
-  const dummyQuat = useMemo(() => new Quaternion(), []);
-  const dummyScale = useMemo(() => new Vector3(1, 1, 1), []);
-  const livePositions = useRef<Vector3[]>(drones.map((d) => d.currentPos));
-
-  useFrame((state, delta) => {
-    if (reducedMotion || !instancedRef.current) return;
-    const t = state.clock.elapsedTime;
-
-    drones.forEach((drone, idx) => {
-      if (needsRepair) {
-        // Repair Mode: converge near hull damage targets and hover at 0.8m - 1.5m
-        const target = drone.repairTarget.clone();
-        const hoverOffset = new Vector3(
-          Math.sin(t * 1.2 + idx) * 0.4,
-          0.8 + Math.cos(t * 1.5 + idx) * 0.2,
-          Math.sin(t * 0.8 + idx) * 0.3,
-        );
-        drone.targetPos.copy(target).add(hoverOffset);
-      } else {
-        // Patrol Mode: fly perimeter inspection splines at 4-6 m distance
-        const currentAngle = drone.baseAngle + t * drone.speed * 0.4;
-        const rad = drone.radius + Math.sin(t * 0.5 + idx) * 0.8;
-        drone.targetPos.set(
-          Math.cos(currentAngle) * rad,
-          drone.height + Math.sin(t * 0.7 + idx) * 1.2,
-          drone.zOffset + Math.cos(currentAngle) * 3.0,
-        );
-      }
-
-      // Smooth interpolation to target
-      drone.currentPos.lerp(drone.targetPos, 1 - Math.pow(0.02, delta));
-      livePositions.current[idx] = drone.currentPos;
-
-      // Look toward ship center or repair point
-      const lookTarget = needsRepair ? drone.repairTarget : new Vector3(0, 0, drone.currentPos.z);
-      const forward = lookTarget.clone().sub(drone.currentPos).normalize();
-      dummyQuat.setFromEuler(
-        new Euler(
-          Math.atan2(-forward.y, Math.hypot(forward.x, forward.z)),
-          Math.atan2(forward.x, forward.z),
-          Math.sin(t * 2 + idx) * 0.15, // slight roll bob
-        ),
-      );
-
-      dummyMatrix.compose(drone.currentPos, dummyQuat, dummyScale);
-      instancedRef.current?.setMatrixAt(idx, dummyMatrix);
-    });
-
-    instancedRef.current.instanceMatrix.needsUpdate = true;
-  });
+  // If drones are not active, render nothing — no clutter or floating dots
+  if (!enabled && !isRepairing) return null;
 
   return (
     <group>
-      {/* Instanced Drone Bodies */}
-      <instancedMesh
-        ref={instancedRef}
-        args={[undefined, undefined, DRONE_COUNT]}
-        castShadow
-      >
-        {/* Hex-thruster maintenance drone chassis */}
-        <cylinderGeometry args={[0.22, 0.28, 0.14, 6]} />
-        <meshStandardMaterial
-          color="#334155"
-          roughness={0.4}
-          metalness={0.8}
-          emissive="#38bdf8"
-          emissiveIntensity={needsRepair ? 0.9 : 0.3}
+      {DRONE_SPECS.map((spec) => (
+        <IndustrialMaintenanceDrone
+          key={spec.id}
+          spec={spec}
+          isRepairing={isRepairing}
         />
-      </instancedMesh>
-
-      {/* Laser welding arcs and spark bursts during repair mode */}
-      <LaserWeldingArcs dronePositions={livePositions.current} active={needsRepair} />
-      <WeldSparks active={needsRepair} />
+      ))}
     </group>
   );
 }

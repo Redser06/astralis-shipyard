@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Star Ship Navigator</title>
+  <link rel="stylesheet" href="styles.css?v=4">
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/libs/meshopt_decoder.js"></script>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <aside id="ship-info">
+    <header>
+      <h1>Star Ship Navigator</h1>
+      <p class="hint">Drag to orbit · scroll to zoom · right-drag to pan</p>
+    </header>
+    <h2 id="ship-name">Spacedock</h2>
+    <div id="ship-list"></div>
+    <button id="btn-fly" class="primary">Launch (F)</button>
+    <p id="status">Starting…</p>
+  </aside>
+
+  <!-- flight HUD, hidden until launch -->
+  <div id="flight-hud" hidden>
+    <div class="hud-top">
+      <div class="readout"><span class="k">SPD</span><b id="f-speed">0.0</b><span class="u">u/s</span></div>
+      <div class="readout"><span class="k">DIST</span><b id="f-dist">0</b><span class="u">u</span></div>
+      <div class="readout"><span class="k" id="f-assist">ASSIST ON</span></div>
+      <div class="readout"><span class="k" id="f-cam">CHASE</span></div>
+    </div>
+    <div class="hud-throttle"><i id="f-throttle"></i></div>
+    <div class="hud-keys">
+      <span><b>W/S</b> thrust</span>
+      <span><b>A/D</b> yaw</span>
+      <span><b>↑/↓</b> pitch</span>
+      <span><b>Q/E</b> roll</span>
+      <span><b>Shift</b> boost</span>
+      <span><b>Space</b> brake</span>
+      <span><b>Z</b> assist</span>
+      <span><b>C</b> camera</span>
+      <span><b>R</b> reset</span>
+      <span><b>F</b> dock</span>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script src="flight.js"></script>
+</body>
+</html>

@@ -1,0 +1,221 @@
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  color: #e8eefc;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#canvas-container { position: fixed; inset: 0; }
+#canvas-container canvas { display: block; }
+
+#ship-info {
+  position: fixed;
+  top: 22px;
+  left: 22px;
+  width: 268px;
+  max-height: calc(100vh - 44px);
+  overflow-y: auto;
+  padding: 16px 16px 12px;
+  z-index: 10;
+  border-radius: 14px;
+  border: 1px solid rgba(140, 180, 255, 0.18);
+  background: linear-gradient(180deg, rgba(10, 16, 30, 0.88), rgba(6, 10, 20, 0.82));
+  backdrop-filter: blur(14px);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+#ship-info::-webkit-scrollbar { width: 6px; }
+#ship-info::-webkit-scrollbar-thumb { background: rgba(120, 160, 255, 0.25); border-radius: 3px; }
+
+#ship-info h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #f2f6ff;
+}
+
+#ship-info .hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: rgba(180, 200, 235, 0.55);
+}
+
+#ship-info header {
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(140, 180, 255, 0.12);
+}
+
+#ship-name {
+  margin: 12px 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6fd8ff;
+}
+
+#ship-list { display: flex; flex-direction: column; gap: 6px; }
+
+#ship-list button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  color: #dfe8fb;
+  cursor: pointer;
+  border-radius: 9px;
+  border: 1px solid rgba(140, 180, 255, 0.14);
+  background: rgba(255, 255, 255, 0.035);
+  transition: background 0.14s ease, border-color 0.14s ease, transform 0.1s ease;
+}
+
+#ship-list button:hover {
+  background: rgba(90, 150, 255, 0.16);
+  border-color: rgba(120, 180, 255, 0.45);
+}
+
+#ship-list button:active { transform: scale(0.985); }
+
+#ship-list button.active {
+  background: rgba(80, 170, 255, 0.24);
+  border-color: rgba(120, 200, 255, 0.75);
+  color: #fff;
+}
+
+#ship-list button .label { font-weight: 500; }
+
+#ship-list button .tag {
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: rgba(200, 220, 255, 0.7);
+  background: rgba(120, 160, 255, 0.14);
+  white-space: nowrap;
+}
+
+#ship-list button.heavy .tag { color: #ffd479; background: rgba(255, 190, 80, 0.14); }
+
+#ship-list button.loading { opacity: 0.75; border-color: rgba(120, 200, 255, 0.6); }
+#ship-list button.loaded::after { content: "●"; font-size: 9px; color: #5df2a0; margin-left: 2px; }
+#ship-list button.failed { border-color: rgba(255, 100, 100, 0.6); }
+#ship-list button.failed .tag { color: #ff8080; background: rgba(255, 80, 80, 0.15); }
+
+#status {
+  margin: 12px 0 2px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.66);
+  min-height: 2.6em;
+}
+
+/* lineup mode hides the panel so the row of ships is unobstructed */
+body.lineup #ship-info { opacity: 1; }
+
+/* ---------------------------------------------------------- flight HUD --- */
+#btn-fly.primary {
+  width: 100%;
+  margin-top: 12px;
+  padding: 9px 12px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #041018;
+  cursor: pointer;
+  border: none;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #6fe0ff, #24b6e6);
+  box-shadow: 0 6px 18px rgba(42, 212, 255, 0.28);
+  transition: transform 0.1s ease, filter 0.14s ease;
+}
+
+#btn-fly.primary:hover { filter: brightness(1.08); }
+#btn-fly.primary:active { transform: scale(0.985); }
+#btn-fly.flying {
+  color: #ffe6e6;
+  background: linear-gradient(180deg, #ff8a8a, #d94a4a);
+  box-shadow: 0 6px 18px rgba(255, 90, 90, 0.25);
+}
+
+#flight-hud {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 9;
+  padding: 0 24px 20px;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+#flight-hud[hidden] { display: none; }
+
+.hud-top {
+  display: flex;
+  gap: 26px;
+  align-items: baseline;
+  margin: 0 0 10px 2px;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+}
+
+.hud-top .readout { display: flex; align-items: baseline; gap: 6px; }
+
+.hud-top .k {
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: rgba(150, 200, 240, 0.6);
+}
+
+.hud-top .k.on { color: #5df2a0; }
+.hud-top .k.off { color: #ffb04f; }
+
+.hud-top b {
+  font-size: 20px;
+  font-weight: 600;
+  color: #eaf4ff;
+  letter-spacing: -0.01em;
+}
+
+.hud-top .u { font-size: 10px; color: rgba(150, 200, 240, 0.45); }
+
+.hud-throttle {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(120, 170, 230, 0.16);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.hud-throttle i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: left center;
+  background: #2ad4ff;
+  transition: transform 0.08s linear, background 0.2s ease;
+}
+
+.hud-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 10.5px;
+  color: rgba(170, 205, 240, 0.5);
+}
+
+.hud-keys b { color: rgba(220, 240, 255, 0.85); font-weight: 600; }
+

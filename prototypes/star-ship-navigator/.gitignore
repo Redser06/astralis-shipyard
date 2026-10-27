@@ -1,0 +1,7 @@
+# third-party model assets — see MODELS.md for what belongs here
+*.glb
+*.zip
+models/
+source/
+textures/
+.DS_Store

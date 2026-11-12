@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Group, Vector3, Quaternion, Euler } from 'three';
+import type { MissionState } from '../../domain/types';
 import { useReducedMotion } from '../useReducedMotion';
 
 /**
@@ -236,7 +237,13 @@ function evaluateFlightSpline(
   return { pos, tangent };
 }
 
-export function ShuttleCraft({ enabled = true }: { enabled?: boolean } = {}) {
+export function ShuttleCraft({
+  enabled = true,
+}: {
+  enabled?: boolean;
+  missionState?: MissionState | null;
+  missionProgress?: number;
+} = {}) {
   const cargoRef = useRef<Group>(null);
   const tacticalRef = useRef<Group>(null);
   const reducedMotion = useReducedMotion();

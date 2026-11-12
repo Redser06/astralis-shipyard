@@ -4,8 +4,10 @@ import { useFrame } from '@react-three/fiber';
 import { AdditiveBlending, type Group, type Points } from 'three';
 import { mulberry32 } from '../../domain/rng';
 import { useReducedMotion } from '../useReducedMotion';
+import type { Blueprint, MissionState } from '../../domain/types';
 import type { EnvironmentId } from '../viewportOptions';
 import { DrydockLighting } from '../lighting/DrydockLighting';
+import { DrydockStation } from './DrydockStation';
 
 
 /**
@@ -478,15 +480,31 @@ function AsteroidField() {
 export function SceneEnvironment({
   environment,
   intensity,
+  blueprint,
+  missionState,
+  missionProgress,
 }: {
   environment: EnvironmentId;
   intensity: number;
+  blueprint?: Blueprint;
+  missionState?: MissionState | null;
+  missionProgress?: number;
 }) {
   return (
     <>
       <IblRig env={environment} intensity={intensity} />
       <Stars radius={120} depth={60} count={4000} factor={3} saturation={0} fade speed={0.4} />
-      {environment === 'drydock' && <Drydock />}
+      {environment === 'drydock' && (
+        <>
+          <Drydock />
+          <DrydockStation
+            intensity={intensity}
+            blueprint={blueprint}
+            missionState={missionState}
+            missionProgress={missionProgress}
+          />
+        </>
+      )}
       {environment === 'nebula' && <Nebula />}
       {environment === 'asteroid' && <AsteroidField />}
     </>

@@ -7,6 +7,7 @@ import {
   SpotLight as ThreeSpotLight,
   Vector3,
 } from 'three';
+import type { Blueprint, MissionState } from '../../domain/types';
 import { mulberry32 } from '../../domain/rng';
 import { useReducedMotion } from '../useReducedMotion';
 
@@ -300,6 +301,8 @@ export function DroneSwarm({
 }: {
   enabled?: boolean;
   isRepairing?: boolean;
+  blueprint?: Blueprint;
+  missionState?: MissionState | null;
 }) {
   // If drones are not active, render nothing — no clutter or floating dots
   if (!enabled && !isRepairing) return null;

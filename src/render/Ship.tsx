@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
-import type { Group } from 'three';
-import type { Blueprint, MissionState } from '../domain/types';
+import { Vector3, type Group } from 'three';
+import type { Blueprint, MissionState, MissionTelemetry, ShipStats } from '../domain/types';
 import { getMaterial } from '../domain/components';
 import { getArchetype } from '../domain/architectures';
 import { deriveWear, isDerelict } from '../domain/condition';
@@ -45,8 +45,32 @@ interface ShipProps {
   burning: boolean;
   assemblyProgress?: number | null;
   missionState?: MissionState | null;
+  missionProgress?: number;
+  missionTelemetry?: MissionTelemetry | null;
+  shipStats?: ShipStats;
   /** Hands the assembled ship group out so it can be exported to .glb. */
   onReady?: (group: Group) => void;
+}
+
+/**
+ * Critically-damped analytical spring step (zero overshoot, C1-continuous across
+ * mission phase transitions, zero per-frame allocations).
+ */
+function stepSpring(
+  value: number,
+  velocity: number,
+  target: number,
+  omega: number,
+  dt: number,
+): [number, number] {
+  const clampedDt = Math.min(0.05, Math.max(0, dt));
+  const delta = value - target;
+  const exp = Math.exp(-omega * clampedDt);
+  const temp = (velocity + omega * delta) * clampedDt;
+  return [
+    target + (delta + temp) * exp,
+    (velocity - omega * temp) * exp,
+  ];
 }
 
 /* --------------------------- Hull marker lights --------------------------- */
@@ -129,10 +153,24 @@ export function Ship({
   burning,
   assemblyProgress,
   missionState,
+  missionProgress,
+  missionTelemetry,
+  shipStats,
   onReady,
 }: ShipProps) {
   const groupRef = useRef<Group>(null);
   const reducedMotion = useReducedMotion();
+
+  // Persistent 6-DOF spring state (zero allocations per frame)
+  const linPosRef = useRef({ x: 0, y: 0, z: 0 });
+  const linVelRef = useRef({ x: 0, y: 0, z: 0 });
+  const angPosRef = useRef({ x: 0, y: 0, z: 0 });
+  const angVelRef = useRef({ x: 0, y: 0, z: 0 });
+
+  // Live hostile interceptor targeting vector (mutated in-place at 60Hz)
+  const [combatTarget] = useState(() => new Vector3(0, 8, 22));
+  const [combatFiring, setCombatFiring] = useState(false);
+  const firingPulseRef = useRef(false);
 
   useEffect(() => {
     if (groupRef.current) onReady?.(groupRef.current);
@@ -150,6 +188,11 @@ export function Ship({
   // Frame 6-8s: Lighting rig snaps from dark to amber to full power
   const isDerelictShip = isDerelict(blueprint.condition);
   const lightsDead = isDerelictShip || (isAssembling && progress < 0.75);
+
+  // Active engine plume & thermal burn across flight phases as well as Test Burn
+  const activeBurn =
+    (burning || (missionState != null && missionState !== 'docked' && missionState !== 'repair')) &&
+    !isAssembling;
 
   const isInstalled = (socketId: string) => {
     if (isAssembling && progress < 0.75) {
@@ -235,87 +278,228 @@ export function Ship({
     const group = groupRef.current;
     if (!group) return;
 
+    const linPos = linPosRef.current;
+    const linVel = linVelRef.current;
+    const angPos = angPosRef.current;
+    const angVel = angVelRef.current;
+
     if (reducedMotion) {
       // Decorative motion only. A derelict still reads as one — it holds a
       // dead, canted attitude instead of tumbling.
-      group.position.y = 0;
-      group.rotation.z = dead ? 0.22 : 0;
-      group.rotation.x = dead ? 0.09 : 0;
+      linPos.x = 0;
+      linPos.y = 0;
+      linPos.z = 0;
+      linVel.x = 0;
+      linVel.y = 0;
+      linVel.z = 0;
+      angPos.x = dead ? 0.09 : 0;
+      angPos.y = 0;
+      angPos.z = dead ? 0.22 : 0;
+      angVel.x = 0;
+      angVel.y = 0;
+      angVel.z = 0;
+      group.position.set(0, 0, 0);
+      group.rotation.order = 'YXZ';
+      group.rotation.set(angPos.x, 0, angPos.z);
+      if (firingPulseRef.current) {
+        firingPulseRef.current = false;
+        setCombatFiring(false);
+      }
       return;
     }
 
     const t = state.clock.elapsedTime;
+
+    // Combat turret targeting & salvo firing synchronization
+    const inCombat = !dead && missionState === 'combat';
+    if (inCombat) {
+      const slot = Math.floor(t / 2.4) % 3;
+      const phase = t * 1.6;
+      if (slot === 0) {
+        combatTarget.set(
+          Math.sin(phase) * 14,
+          7 + Math.cos(phase * 0.8) * 3,
+          20 + Math.sin(phase * 0.5) * 6,
+        );
+      } else if (slot === 1) {
+        combatTarget.set(
+          12 + Math.cos(phase * 1.1) * 6,
+          9 + Math.sin(phase) * 3,
+          14 + Math.sin(phase * 0.7) * 8,
+        );
+      } else {
+        combatTarget.set(
+          -12 + Math.sin(phase * 1.2) * 6,
+          8 + Math.cos(phase * 0.9) * 3,
+          16 + Math.cos(phase * 0.6) * 8,
+        );
+      }
+
+      const salvoActive = missionTelemetry
+        ? missionTelemetry.weaponsHot && missionTelemetry.combatAction === 'firing_salvo'
+        : true;
+      const pulse = salvoActive && t % 0.44 < 0.18;
+      if (pulse !== firingPulseRef.current) {
+        firingPulseRef.current = pulse;
+        setCombatFiring(pulse);
+      }
+    } else if (firingPulseRef.current) {
+      firingPulseRef.current = false;
+      setCombatFiring(false);
+    }
+
     if (dead) {
       // Powerless and tumbling. Slow, uncommanded, slightly off every axis.
+      group.rotation.order = 'XYZ';
       group.rotation.z += delta * 0.09;
       group.rotation.x += delta * 0.035;
-      group.position.y = Math.sin(t * 0.3) * 0.06;
-    } else if (missionState) {
+      group.position.set(0, Math.sin(t * 0.3) * 0.06, 0);
+      linPos.y = group.position.y;
+      angPos.x = group.rotation.x;
+      angPos.z = group.rotation.z;
+      return;
+    }
+
+    let tx = 0;
+    let ty = 0;
+    let tz = 0;
+    let rx = 0;
+    let ry = 0;
+    let rz = 0;
+    let linOmega = 4.5;
+    let angOmega = 5.0;
+
+    if (missionState) {
+      const p = Math.min(1, Math.max(0, missionProgress ?? 0));
+      const agility = shipStats ? 0.65 + (shipStats.speed / 100) * 0.7 : 1.0;
+
       switch (missionState) {
-        case 'departing': {
-          // Forward clearance glide and slight nose pitch down
-          group.position.x = 0;
-          group.position.y = Math.sin(t * 1.5) * 0.08;
-          group.position.z = Math.sin(t * 0.8) * 0.5;
-          group.rotation.x = -0.03;
-          group.rotation.z = Math.sin(t * 0.6) * 0.02;
-          break;
-        }
-        case 'warp': {
-          // High-speed warp vibration & micro-tremor
-          group.position.x = 0;
-          group.position.y = 0;
-          group.position.z = (Math.random() - 0.5) * 0.06;
-          group.rotation.x = 0;
-          group.rotation.z = (Math.random() - 0.5) * 0.01;
-          break;
-        }
-        case 'combat': {
-          // Tactical evasive weave and banking roll (±12° = ±0.21 rad)
-          group.position.x = Math.sin(t * 1.4) * 0.9;
-          group.position.y = Math.sin(t * 1.8) * 0.4;
-          group.position.z = 0;
-          group.rotation.z = Math.sin(t * 1.6) * 0.21;
-          group.rotation.x = Math.sin(t * 1.2) * 0.08;
-          break;
-        }
-        case 'asteroid_field': {
-          // Deliberate obstacle navigation weave
-          group.position.x = Math.sin(t * 0.7) * 0.6;
-          group.position.y = Math.sin(t * 1.2) * 0.15;
-          group.position.z = 0;
-          group.rotation.z = Math.sin(t * 0.7) * 0.08;
-          group.rotation.x = Math.sin(t * 0.5) * 0.04;
-          break;
-        }
-        case 'planet_orbit':
-        case 'return_transit': {
-          // Steady orbital traverse
-          group.position.x = Math.sin(t * 0.5) * 0.3;
-          group.position.y = Math.sin(t * 1.0) * 0.12;
-          group.position.z = 0;
-          group.rotation.z = Math.sin(t * 0.5) * 0.04;
-          group.rotation.x = 0;
-          break;
-        }
         case 'docked':
-        case 'repair':
-        default: {
-          // Stable drydock berth hovering
-          group.position.x = 0;
-          group.position.y = Math.sin(t * 1.2) * 0.05;
-          group.position.z = 0;
-          group.rotation.set(0, 0, 0);
+        case 'repair': {
+          // Exact magnetic keel capture so spacedock clamps & tunnels seat flush
+          tx = 0;
+          ty = 0;
+          tz = 0;
+          rx = 0;
+          ry = 0;
+          rz = 0;
+          linOmega = 5.2;
+          angOmega = 5.8;
+          break;
+        }
+
+        case 'departing': {
+          if (p < 0.28) {
+            // Micro-RCS release drift clearing gantry clamps
+            const u = p / 0.28;
+            tx = 0;
+            ty = 0.14 * u * u;
+            tz = 0.7 * u;
+            rx = -0.015 * u;
+            ry = 0;
+            rz = Math.sin(t * 6.5) * 0.006;
+            linOmega = 4.8;
+            angOmega = 5.5;
+          } else {
+            // Main drive spool-up pitch-up (+Y climb + forward surge +Z)
+            const u = (p - 0.28) / 0.72;
+            const s = u * u * (3 - 2 * u);
+            tx = Math.sin(s * Math.PI * 0.5) * 0.45;
+            ty = 0.14 + s * 2.7;
+            tz = 0.7 + s * 5.2;
+            rx = -0.15 * Math.sin(s * Math.PI * 0.85);
+            ry = 0.08 * s;
+            rz = -0.04 * Math.sin(s * Math.PI);
+            linOmega = 4.2;
+            angOmega = 4.8;
+          }
+          break;
+        }
+
+        case 'warp': {
+          // Deterministic Alcubierre harmonic spool-up & longitudinal surge
+          const env = Math.min(1, p / 0.14) * Math.min(1, (1 - p) / 0.12 + 0.15);
+          tx = 0.025 * Math.sin(t * 19.1) * env;
+          ty = 0.022 * Math.cos(t * 27.3) * env;
+          tz = 1.65 * env + 0.045 * Math.sin(t * 23.7) * Math.cos(t * 11.3) * env;
+          rx = 0.012 * Math.sin(t * 13.1) * env;
+          ry = 0.008 * Math.cos(t * 15.7) * env;
+          rz = 0.014 * Math.sin(t * 17.3) * env;
+          linOmega = 9.0;
+          angOmega = 9.0;
+          break;
+        }
+
+        case 'asteroid_field': {
+          // Slalom banking physics: roll & yaw lead derived from lateral velocity
+          tx = (Math.sin(t * 0.85) * 2.3 + Math.sin(t * 1.9 + 0.7) * 0.8) * agility;
+          ty = Math.sin(t * 1.15 + 0.5) * 0.9 + Math.cos(t * 2.1) * 0.35;
+          tz = Math.cos(t * 0.65) * 0.9;
+          const vx = (Math.cos(t * 0.85) * 2.3 * 0.85 + Math.cos(t * 1.9 + 0.7) * 0.8 * 1.9) * agility;
+          const vy = Math.cos(t * 1.15 + 0.5) * 0.9 * 1.15 - Math.sin(t * 2.1) * 0.35 * 2.1;
+          rx = Math.max(-0.18, Math.min(0.18, -vy * 0.085));
+          ry = Math.max(-0.24, Math.min(0.24, vx * 0.08));
+          rz = Math.max(-0.34, Math.min(0.34, -vx * 0.13));
+          linOmega = 5.5;
+          angOmega = 6.0;
+          break;
+        }
+
+        case 'planet_orbit': {
+          // Majestic slow orbital roll/bank sweep appreciating planetary horizon
+          tx = Math.sin(t * 0.32) * 1.4;
+          ty = Math.cos(t * 0.28) * 0.55;
+          tz = Math.sin(t * 0.22) * 0.7;
+          rx = Math.sin(t * 0.28) * 0.05;
+          ry = Math.cos(t * 0.32) * 0.08;
+          rz = -Math.cos(t * 0.32) * 0.15;
+          linOmega = 3.5;
+          angOmega = 3.8;
+          break;
+        }
+
+        case 'combat': {
+          // Sweeping jinking bank-and-pitch turns (±16° = ±0.28 rad) coupled with yaw lead
+          tx = (Math.sin(t * 1.35) * 2.5 + Math.cos(t * 2.65) * 0.7) * agility;
+          ty = Math.sin(t * 1.75) * 1.1 + Math.sin(t * 0.9) * 0.45;
+          tz = Math.sin(t * 1.1) * 1.1;
+          const vx = (Math.cos(t * 1.35) * 2.5 * 1.35 - Math.sin(t * 2.65) * 0.7 * 2.65) * agility;
+          const vy = Math.cos(t * 1.75) * 1.1 * 1.75 + Math.cos(t * 0.9) * 0.45 * 0.9;
+          rx = Math.max(-0.18, Math.min(0.18, -vy * 0.075));
+          ry = Math.max(-0.22, Math.min(0.22, vx * 0.06));
+          rz = Math.max(-0.28, Math.min(0.28, -vx * 0.08));
+          linOmega = 6.5;
+          angOmega = 7.0;
+          break;
+        }
+
+        case 'return_transit': {
+          // Smooth deceleration flare, pitch leveling, and berth alignment to [0, 0, 0]
+          const flareRaw = Math.max(0, 1 - p / 0.85);
+          const flare = flareRaw * flareRaw * (3 - 2 * flareRaw);
+          tx = Math.sin(p * Math.PI * 1.5) * 1.6 * flare;
+          ty = 1.6 * flare + Math.sin(p * Math.PI) * 0.35 * flare;
+          tz = 5.0 * flare;
+          rx = -0.07 * flare;
+          ry = -0.05 * Math.sin(p * Math.PI) * flare;
+          rz = -0.08 * Math.sin(p * Math.PI * 1.5) * flare;
+          linOmega = 4.5;
+          angOmega = 5.2;
           break;
         }
       }
-    } else {
-      group.rotation.z = 0;
-      group.rotation.x = 0;
-      group.position.x = 0;
-      group.position.y = Math.sin(t * 1.5) * 0.12;
-      group.position.z = 0;
     }
+
+    [linPos.x, linVel.x] = stepSpring(linPos.x, linVel.x, tx, linOmega, delta);
+    [linPos.y, linVel.y] = stepSpring(linPos.y, linVel.y, ty, linOmega, delta);
+    [linPos.z, linVel.z] = stepSpring(linPos.z, linVel.z, tz, linOmega, delta);
+    [angPos.x, angVel.x] = stepSpring(angPos.x, angVel.x, rx, angOmega, delta);
+    [angPos.y, angVel.y] = stepSpring(angPos.y, angVel.y, ry, angOmega, delta);
+    [angPos.z, angVel.z] = stepSpring(angPos.z, angVel.z, rz, angOmega, delta);
+
+    group.position.set(linPos.x, linPos.y, linPos.z);
+    group.rotation.order = 'YXZ';
+    group.rotation.set(angPos.x, angPos.y, angPos.z);
   });
 
   return (
@@ -341,7 +525,7 @@ export function Ship({
                   <SocketMount socket={socket} retracted={retracted}>
                     <EngineBell
                       sublight={blueprint.sublight}
-                      burning={burning && !isAssembling}
+                      burning={activeBurn}
                       dead={dead}
                       reducedMotion={reducedMotion}
                     />
@@ -350,7 +534,7 @@ export function Ship({
                     <group position={[0, engineBellLength(blueprint.sublight), 0]}>
                       <ExhaustPlume
                         sublight={blueprint.sublight}
-                        burning={burning && !isAssembling}
+                        burning={activeBurn}
                         dead={dead}
                         seed={blueprint.seed}
                         mode={effectiveMode}
@@ -364,7 +548,7 @@ export function Ship({
             case 'radiator':
               return protrusions.radiators ? (
                 <SocketMount key={socket.id} socket={socket} retracted={retracted}>
-                  <Radiator burning={burning} thermalWear={wear.thermal} mode={effectiveMode} dead={dead} />
+                  <Radiator burning={activeBurn} thermalWear={wear.thermal} mode={effectiveMode} dead={dead} />
                 </SocketMount>
               ) : null;
 
@@ -385,7 +569,13 @@ export function Ship({
             case 'weapon':
               return (
                 <SocketMount key={socket.id} socket={socket} retracted={retracted}>
-                  <Turret weapon={blueprint.weapons} mode={effectiveMode} dead={dead} />
+                  <Turret
+                    weapon={blueprint.weapons}
+                    mode={effectiveMode}
+                    dead={dead}
+                    firing={missionState === 'combat' && !dead && !reducedMotion ? combatFiring : false}
+                    targetPosition={missionState === 'combat' && !dead ? combatTarget : null}
+                  />
                 </SocketMount>
               );
 

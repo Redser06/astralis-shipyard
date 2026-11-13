@@ -21,8 +21,18 @@ import {
   createInitialMissionTelemetry,
   stepMission,
 } from './domain/missionLoop';
-import type { MissionTelemetry } from './domain/types';
-import type { CinematicCut } from './render/camera/CinematicDirector';
+import type { MissionState, MissionTelemetry } from './domain/types';
+import {
+  CAMERA_PRESETS,
+  CINEMATIC_CUTS,
+  ENVIRONMENTS,
+  RENDER_MODES,
+  type CameraPreset,
+  type CinematicCut,
+  type EnvironmentId,
+  type Protrusions,
+  type RenderMode,
+} from './render/viewportOptions';
 
 import { HULL_ARCHITECTURES } from './domain/architectures';
 import {
@@ -49,19 +59,80 @@ import {
   type ResearchState,
 } from './domain/unlocks';
 import { exportGlb, slugify } from './export/glb';
-import {
-  CAMERA_PRESETS,
-  ENVIRONMENTS,
-  RENDER_MODES,
-  type CameraPreset,
-  type EnvironmentId,
-  type Protrusions,
-  type RenderMode,
-} from './render/viewportOptions';
 import { OptionRow, Panel, Segmented, Slider, StatBar, Toggle } from './ui/primitives';
 import { HullSculptor } from './ui/HullSculptor';
 import { ArchitectPanel, type ArchitectEntry } from './ui/ArchitectPanel';
 import { requestProposal } from './services/architect';
+
+function formatVelocity(velocityKms: number): string {
+  if (velocityKms >= 100_000) {
+    return `${(velocityKms / 299_792).toFixed(2)} c`;
+  }
+  return `${velocityKms.toFixed(1)} km/s`;
+}
+
+const AUTO_SCENE_RULES: Readonly<
+  Record<
+    MissionState,
+    {
+      splitAt: number;
+      early: { env: EnvironmentId; cut: CinematicCut };
+      late: { env: EnvironmentId; cut: CinematicCut };
+    }
+  >
+> = {
+  docked: {
+    splitAt: 0.55,
+    early: { env: 'drydock', cut: 'docking_umbilical' },
+    late: { env: 'drydock', cut: 'gantry_dolly' },
+  },
+  departing: {
+    splitAt: 0.35,
+    early: { env: 'drydock', cut: 'docking_umbilical' },
+    late: { env: 'drydock', cut: 'chase_cam' },
+  },
+  warp: {
+    splitAt: 0.5,
+    early: { env: 'nebula', cut: 'chase_cam' },
+    late: { env: 'nebula', cut: 'orbital_horizon' },
+  },
+  asteroid_field: {
+    splitAt: 0.5,
+    early: { env: 'asteroid', cut: 'flyby_pass' },
+    late: { env: 'asteroid', cut: 'chase_cam' },
+  },
+  planet_orbit: {
+    splitAt: 2.0,
+    early: { env: 'nebula', cut: 'orbital_horizon' },
+    late: { env: 'nebula', cut: 'orbital_horizon' },
+  },
+  combat: {
+    splitAt: 0.55,
+    early: { env: 'asteroid', cut: 'turret_ots' },
+    late: { env: 'asteroid', cut: 'flyby_pass' },
+  },
+  return_transit: {
+    splitAt: 0.3,
+    early: { env: 'nebula', cut: 'chase_cam' },
+    late: { env: 'drydock', cut: 'docking_umbilical' },
+  },
+  repair: {
+    splitAt: 0.5,
+    early: { env: 'drydock', cut: 'docking_umbilical' },
+    late: { env: 'drydock', cut: 'gantry_dolly' },
+  },
+};
+
+function resolveAutoScene(state: MissionState, progress: number) {
+  const rule = AUTO_SCENE_RULES[state];
+  const isLate = progress >= rule.splitAt;
+  const pick = isLate ? rule.late : rule.early;
+  return {
+    slotKey: `${state}:${isLate ? 1 : 0}`,
+    environment: pick.env,
+    cut: pick.cut,
+  };
+}
 
 /**
  * The render stack — three, R3F, drei, postprocessing — is well over a megabyte
@@ -130,6 +201,7 @@ export default function App() {
   const [cinematicCut, setCinematicCut] = useState<CinematicCut>('gantry_dolly');
   const [manualCameraControl, setManualCameraControl] = useState(false);
   const [showDrones, setShowDrones] = useState(false);
+  const [dockingConnected, setDockingConnected] = useState(true);
 
   // 8-second Procedural Time-Lapse Reconstruction Montage
   const [isAssembling, setIsAssembling] = useState(false);
@@ -138,10 +210,40 @@ export default function App() {
   const shipGroup = useRef<Group | null>(null);
   const burnTimer = useRef<number | null>(null);
 
+  const stats = useMemo(() => deriveStats(blueprint), [blueprint]);
+  const overall = useMemo(() => deriveOverall(stats), [stats]);
+  const wear = useMemo(
+    () => deriveWear(blueprint.condition, blueprint.seed),
+    [blueprint.condition, blueprint.seed],
+  );
+  const conditionPreset = useMemo(() => presetFor(blueprint.condition), [blueprint.condition]);
+
   const telemetryRef = useRef<MissionTelemetry>(missionTelemetry);
   useEffect(() => {
     telemetryRef.current = missionTelemetry;
   }, [missionTelemetry]);
+
+  const statsRef = useRef(stats);
+  useEffect(() => {
+    statsRef.current = stats;
+  }, [stats]);
+
+  const lastAutoSceneKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!missionActive || manualCameraControl) {
+      lastAutoSceneKeyRef.current = null;
+    }
+  }, [missionActive, manualCameraControl]);
+
+  const handleToggleMission = useCallback(() => {
+    const next = !missionActive;
+    setMissionActive(next);
+    if (next) {
+      setTab('mission');
+    } else {
+      setBurning(false);
+    }
+  }, [missionActive]);
 
   // Step autonomous mission loop
   useEffect(() => {
@@ -155,8 +257,11 @@ export default function App() {
       const dt = Math.min(0.2, (now - lastTime) / 1000);
       lastTime = now;
 
-      // Pure domain step executed smoothly
-      const result = stepMission(telemetryRef.current, dt, { timeScale: missionTimeScale });
+      // Pure domain step executed smoothly with live ship stats
+      const result = stepMission(telemetryRef.current, dt, {
+        timeScale: missionTimeScale,
+        shipStats: statsRef.current,
+      });
       telemetryRef.current = result.telemetry;
 
       // Throttle React DOM re-renders to 10Hz (every 100ms) to eliminate 60Hz DOM thrashing
@@ -169,44 +274,15 @@ export default function App() {
         }));
 
         if (!manualCameraControl) {
-          switch (result.telemetry.state) {
-            case 'docked':
-            case 'repair':
-              setEnvironment('drydock');
-              setCinematicCut('gantry_dolly');
-              break;
-            case 'departing':
-              setEnvironment('drydock');
-              setCinematicCut('chase_cam');
-              break;
-            case 'warp':
-              setEnvironment('nebula');
-              setCinematicCut('chase_cam');
-              break;
-            case 'asteroid_field':
-              setEnvironment('asteroid');
-              setCinematicCut('flyby_pass');
-              break;
-            case 'planet_orbit':
-              setEnvironment('nebula');
-              setCinematicCut('flyby_pass');
-              break;
-            case 'combat':
-              setEnvironment('asteroid');
-              setCinematicCut('turret_ots');
-              break;
-            case 'return_transit':
-              setEnvironment('nebula');
-              setCinematicCut('chase_cam');
-              break;
+          const nextScene = resolveAutoScene(result.telemetry.state, result.telemetry.progress);
+          if (nextScene.slotKey !== lastAutoSceneKeyRef.current) {
+            lastAutoSceneKeyRef.current = nextScene.slotKey;
+            setEnvironment(nextScene.environment);
+            setCinematicCut(nextScene.cut);
           }
         }
 
-        if (result.telemetry.state === 'combat') {
-          setBurning(true);
-        } else if (result.telemetry.state !== 'warp') {
-          setBurning(false);
-        }
+        setBurning(result.telemetry.throttlePct > 25);
       }
 
       animId = requestAnimationFrame(loop);
@@ -266,14 +342,6 @@ export default function App() {
     },
     [],
   );
-
-  const stats = useMemo(() => deriveStats(blueprint), [blueprint]);
-  const overall = useMemo(() => deriveOverall(stats), [stats]);
-  const wear = useMemo(
-    () => deriveWear(blueprint.condition, blueprint.seed),
-    [blueprint.condition, blueprint.seed],
-  );
-  const conditionPreset = useMemo(() => presetFor(blueprint.condition), [blueprint.condition]);
 
   // Stable identity matters: Ship calls this from an effect keyed on the
   // callback, so an inline arrow would re-fire it on every render.
@@ -392,10 +460,7 @@ export default function App() {
           </div>
           <button
             type="button"
-            onClick={() => {
-              setMissionActive((prev) => !prev);
-              if (!missionActive) setTab('mission');
-            }}
+            onClick={handleToggleMission}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium ring-1 transition-colors ${
               missionActive
                 ? 'bg-neon-rose/20 text-neon-rose ring-neon-rose/40 hover:bg-neon-rose/30'
@@ -475,25 +540,61 @@ export default function App() {
                 (missionActive && missionTelemetry.state === 'repair') ||
                 (showDrones && blueprint.condition > 0.05)
               }
+              dockingConnected={missionActive ? true : dockingConnected}
               missionState={missionActive ? missionTelemetry.state : null}
+              missionProgress={missionActive ? missionTelemetry.progress : 0}
+              missionTelemetry={missionActive ? missionTelemetry : null}
+              shipStats={stats}
             />
           </Suspense>
 
           {/* Mission Sortie HUD Overlay */}
           {missionActive && (
-            <div className="glass-panel pointer-events-none absolute left-4 top-4 max-w-sm rounded-xl p-3 border border-neon-cyan/30">
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-neon-cyan opacity-75" />
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-neon-cyan" />
-                </span>
-                <span className="font-orbitron text-xs font-bold uppercase tracking-wider text-neon-cyan">
-                  SORTIE // {missionTelemetry.state.replace('_', ' ')}
+            <div className="glass-panel pointer-events-none absolute left-4 top-4 w-80 rounded-xl border border-neon-cyan/30 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-neon-cyan opacity-75" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-neon-cyan" />
+                  </span>
+                  <span className="font-orbitron text-xs font-bold uppercase tracking-wider text-neon-cyan">
+                    SORTIE // {missionTelemetry.state.replace('_', ' ')}
+                  </span>
+                </div>
+                <span
+                  className={`rounded px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase ${
+                    missionTelemetry.dockingClampsEngaged
+                      ? 'bg-neon-amber/20 text-neon-amber ring-1 ring-neon-amber/40'
+                      : 'bg-slate-800/80 text-slate-300 ring-1 ring-slate-700'
+                  }`}
+                >
+                  Clamps {missionTelemetry.dockingClampsEngaged ? 'LOCKED' : 'RELEASED'}
                 </span>
               </div>
-              <p className="mt-1 text-[11px] text-slate-300">
-                Waypoint: <span className="font-medium text-white">{missionTelemetry.currentWaypoint}</span>
+              <p className="mt-1 text-[11px] font-medium text-neon-cyan/90">
+                {missionTelemetry.subPhaseLabel}
               </p>
+              <p className="mt-0.5 text-[10px] text-slate-400">
+                Waypoint: <span className="font-medium text-slate-200">{missionTelemetry.currentWaypoint}</span>
+              </p>
+              <div className="mt-2 grid grid-cols-3 gap-1.5 rounded-lg bg-slate-900/60 px-2 py-1.5 font-mono text-[10px]">
+                <div>
+                  <span className="block text-[9px] uppercase text-slate-500">Velocity</span>
+                  <span className="font-bold text-slate-100">{formatVelocity(missionTelemetry.velocityKms)}</span>
+                </div>
+                <div>
+                  <span className="block text-[9px] uppercase text-slate-500">Throttle</span>
+                  <span className="font-bold text-neon-amber">{missionTelemetry.throttlePct}%</span>
+                </div>
+                <div>
+                  <span className="block text-[9px] uppercase text-slate-500">Alt</span>
+                  <span className="font-bold text-slate-200">
+                    {missionTelemetry.altitudeKm >= 1000
+                      ? `${(missionTelemetry.altitudeKm / 1000).toFixed(1)}k km`
+                      : `${Math.round(missionTelemetry.altitudeKm)} km`}
+                  </span>
+                </div>
+              </div>
               <div className="mt-2 flex items-center gap-2">
                 <span className="text-[10px] uppercase text-slate-400">Integrity:</span>
                 <span
@@ -517,9 +618,10 @@ export default function App() {
                 </div>
               </div>
               {missionTelemetry.activeThreats > 0 && (
-                <div className="mt-1 flex items-center gap-1.5 text-[10px] font-bold text-neon-rose">
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-neon-rose animate-pulse" />
-                  {missionTelemetry.activeThreats} HOSTILE INTERCEPTORS LOCKED (DEFENSES ENGAGED)
+                <div className="mt-1.5 flex items-center gap-1.5 text-[10px] font-bold text-neon-rose">
+                  <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-neon-rose" />
+                  {missionTelemetry.activeThreats} HOSTILE INTERCEPTORS LOCKED (
+                  {missionTelemetry.weaponsHot ? 'WEAPONS HOT' : 'COUNTERMEASURES'})
                 </div>
               )}
             </div>
@@ -643,7 +745,7 @@ export default function App() {
                 timeScale={missionTimeScale}
                 cinematicCut={cinematicCut}
                 manualCamera={manualCameraControl}
-                onToggleActive={() => setMissionActive((p) => !p)}
+                onToggleActive={handleToggleMission}
                 onTimeScale={setMissionTimeScale}
                 onCinematicCut={setCinematicCut}
                 onToggleManualCamera={setManualCameraControl}
@@ -739,6 +841,19 @@ export default function App() {
                   label="Maintenance drones"
                   checked={showDrones}
                   onChange={setShowDrones}
+                />
+                <Toggle
+                  label="Docking rings & tunnels"
+                  hint={
+                    environment !== 'drydock'
+                      ? 'Orbital Drydock only'
+                      : missionActive
+                        ? 'Controlled by active sortie'
+                        : undefined
+                  }
+                  checked={missionActive ? missionTelemetry.dockingClampsEngaged : dockingConnected}
+                  disabled={environment !== 'drydock' || missionActive}
+                  onChange={setDockingConnected}
                 />
               </div>
             </Panel>
@@ -1114,15 +1229,33 @@ function MissionTab({
         </p>
 
         <div className="space-y-2.5 rounded-lg border border-slate-800 bg-slate-900/50 p-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] uppercase tracking-wider text-slate-500">Mission State</span>
-            <span
-              className={`rounded border px-2 py-0.5 font-orbitron text-xs font-bold uppercase tracking-wider ${
-                stateBadge[telemetry.state] ?? 'text-slate-300'
-              }`}
-            >
-              {telemetry.state.replace('_', ' ')}
+            <div className="flex items-center gap-1.5">
+              <span
+                className={`rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase ${
+                  telemetry.dockingClampsEngaged
+                    ? 'border-neon-amber/40 bg-neon-amber/15 text-neon-amber'
+                    : 'border-slate-700 bg-slate-800/70 text-slate-300'
+                }`}
+              >
+                Clamps {telemetry.dockingClampsEngaged ? 'LOCKED' : 'RELEASED'}
+              </span>
+              <span
+                className={`rounded border px-2 py-0.5 font-orbitron text-xs font-bold uppercase tracking-wider ${
+                  stateBadge[telemetry.state] ?? 'text-slate-300'
+                }`}
+              >
+                {telemetry.state.replace('_', ' ')}
+              </span>
+            </div>
+          </div>
+
+          <div className="rounded bg-space-950/60 px-2.5 py-1.5 text-[11px] text-slate-200">
+            <span className="block text-[9px] uppercase tracking-wider text-slate-500">
+              Sub-Phase Operations
             </span>
+            <span className="font-medium text-neon-cyan">{telemetry.subPhaseLabel}</span>
           </div>
 
           <div>
@@ -1135,6 +1268,48 @@ function MissionTab({
                 className="h-full rounded-full bg-neon-cyan transition-all duration-300"
                 style={{ width: `${Math.round(telemetry.progress * 100)}%` }}
               />
+            </div>
+          </div>
+
+          {/* Real-time Flight & Orbital Kinematics */}
+          <div className="grid grid-cols-2 gap-2 border-t border-slate-800 pt-2 text-[11px]">
+            <div className="rounded bg-space-950/50 px-2 py-1.5">
+              <span className="block text-[9px] uppercase text-slate-500">Velocity</span>
+              <span className="font-mono text-xs font-bold text-slate-100">
+                {formatVelocity(telemetry.velocityKms)}
+              </span>
+              {telemetry.velocityKms >= 100_000 && (
+                <span className="block font-mono text-[9px] text-slate-400">
+                  {Math.round(telemetry.velocityKms).toLocaleString()} km/s
+                </span>
+              )}
+            </div>
+            <div className="rounded bg-space-950/50 px-2 py-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[9px] uppercase text-slate-500">Throttle</span>
+                <span className="font-mono text-xs font-bold text-neon-amber">
+                  {telemetry.throttlePct}%
+                </span>
+              </div>
+              <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+                <div
+                  className="h-full rounded-full bg-neon-amber transition-all duration-150"
+                  style={{ width: `${telemetry.throttlePct}%` }}
+                />
+              </div>
+            </div>
+            <div className="rounded bg-space-950/50 px-2 py-1">
+              <span className="block text-[9px] uppercase text-slate-500">Orbital Alt</span>
+              <span className="font-mono text-[11px] font-medium text-slate-200">
+                {telemetry.altitudeKm.toLocaleString()} km
+              </span>
+            </div>
+            <div className="rounded bg-space-950/50 px-2 py-1">
+              <span className="block text-[9px] uppercase text-slate-500">Hdg / Bank</span>
+              <span className="font-mono text-[11px] font-medium text-slate-200">
+                {telemetry.headingDeg.toFixed(0)}° / {telemetry.bankDeg >= 0 ? '+' : ''}
+                {telemetry.bankDeg.toFixed(1)}°
+              </span>
             </div>
           </div>
 
@@ -1169,6 +1344,25 @@ function MissionTab({
           </div>
 
           <div className="flex justify-between border-t border-slate-800 pt-2 text-[11px]">
+            <span className="text-slate-500">Tactical / Weapons:</span>
+            <span
+              className={`font-mono font-bold uppercase ${
+                telemetry.weaponsHot
+                  ? 'text-neon-rose'
+                  : telemetry.activeThreats > 0
+                    ? 'text-neon-amber'
+                    : 'text-slate-400'
+              }`}
+            >
+              {telemetry.weaponsHot
+                ? `WEAPONS HOT (${telemetry.combatAction.replace('_', ' ')})`
+                : telemetry.combatAction === 'standby'
+                  ? 'Standby'
+                  : telemetry.combatAction.replace('_', ' ')}
+            </span>
+          </div>
+
+          <div className="flex justify-between text-[11px]">
             <span className="text-slate-500">Hostile Threats:</span>
             <span
               className={`font-mono font-bold ${
@@ -1209,16 +1403,11 @@ function MissionTab({
           <div className="mt-2 space-y-1.5">
             <span className="block text-[11px] text-slate-500">Camera Preset Cut:</span>
             <div className="grid grid-cols-2 gap-1.5">
-              {[
-                { id: 'gantry_dolly', label: 'Gantry Dolly' },
-                { id: 'chase_cam', label: 'Chase Cam' },
-                { id: 'turret_ots', label: 'Turret OTS' },
-                { id: 'flyby_pass', label: 'Flyby Pass' },
-              ].map((c) => (
+              {CINEMATIC_CUTS.map((c) => (
                 <button
                   key={c.id}
                   type="button"
-                  onClick={() => onCinematicCut(c.id as CinematicCut)}
+                  onClick={() => onCinematicCut(c.id)}
                   className={`rounded px-2 py-1.5 text-[11px] font-medium transition-colors ${
                     cinematicCut === c.id
                       ? 'bg-neon-cyan/20 text-neon-cyan ring-1 ring-neon-cyan/40'

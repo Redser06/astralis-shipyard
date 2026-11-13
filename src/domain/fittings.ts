@@ -434,24 +434,53 @@ export const WEAPON_FITTINGS: Readonly<Record<WeaponId, FittingDef>> = {
     anchors: {
       feed: [0.24, 0.04, 0.26],
       breech: [0.2, 0.56, 0.3],
+      'feed-p': [-0.24, 0.04, 0.26],
+      'breech-p': [-0.2, 0.56, 0.3],
     },
     exposure: { thermal: 1.4, abrasion: 1.3 },
     pieces: [
       barbette(),
-      // Welded receiver box between the barbette and the barrels.
+      // Welded armored turret cheek housing between the barbette and barrels.
       {
-        recipe: { kind: 'slab', size: [0.66, 0.34, 0.78], chamfer: 0.05 },
-        at: [0, 0.57, 0],
+        recipe: { kind: 'slab', size: [0.76, 0.36, 0.84], chamfer: 0.05 },
+        at: [0, 0.56, 0],
         material: 'armour',
       },
-      ...[-0.16, 0.16].map(
-        (x): Piece => ({
-          recipe: { kind: 'cylinder', radiusTop: 0.075, radiusBottom: 0.09, height: 1.4 },
-          at: [x, 0.95, 0],
+      // Dorsal electro-optical rangefinder turret blister.
+      {
+        recipe: { kind: 'slab', size: [0.28, 0.16, 0.36], chamfer: 0.03 },
+        at: [0, 0.78, -0.14],
+        material: 'structure',
+      },
+      {
+        recipe: { kind: 'cylinder', radiusTop: 0.05, radiusBottom: 0.05, height: 0.08, sides: 10 },
+        at: [0, 0.8, 0.06],
+        rotation: [Math.PI / 2, 0, 0],
+        material: 'dark',
+        glow: { color: '#38bdf8', intensity: 1.8 },
+      },
+      ...[-0.17, 0.17].flatMap((x): Piece[] => [
+        // Heavy trunnion recoil cradle jacket.
+        {
+          recipe: { kind: 'cylinder', radiusTop: 0.105, radiusBottom: 0.115, height: 0.34 },
+          at: [x, 0.84, 0],
+          material: 'structure',
+        },
+        // Rifled barrel core.
+        {
+          recipe: { kind: 'cylinder', radiusTop: 0.072, radiusBottom: 0.088, height: 1.42 },
+          at: [x, 1.0, 0],
           material: 'machined',
-        }),
-      ),
+        },
+        // Muzzle brake collar.
+        {
+          recipe: { kind: 'cylinder', radiusTop: 0.092, radiusBottom: 0.088, height: 0.14 },
+          at: [x, 1.66, 0],
+          material: 'dark',
+        },
+      ]),
       { recipe: { kind: 'pipe', from: 'feed', to: 'breech', radius: 0.035 }, material: 'plumbing' },
+      { recipe: { kind: 'pipe', from: 'feed-p', to: 'breech-p', radius: 0.035 }, material: 'plumbing' },
     ],
   },
 
@@ -466,34 +495,62 @@ export const WEAPON_FITTINGS: Readonly<Record<WeaponId, FittingDef>> = {
     anchors: {
       feed: [0.26, 0.04, 0.2],
       collar: [0.19, 0.95, 0.06],
+      reservoir: [-0.26, 0.56, -0.18],
+      return: [-0.22, 0.04, -0.14],
     },
     exposure: { thermal: 1.8 },
     pieces: [
       barbette(),
-      // A spun focusing barrel: waisted at the breech, belled at the muzzle.
+      // Spun armored focusing shroud and stepped cooling taper.
       {
         recipe: {
           kind: 'lathe',
           profile: [
-            { r: 0.02, y: 0.38 },
-            { r: 0.2, y: 0.45 },
-            { r: 0.17, y: 0.72 },
-            { r: 0.125, y: 1.6 },
-            { r: 0.115, y: 2.02 },
-            { r: 0.165, y: 2.16 },
-            { r: 0.12, y: 2.24 },
+            { r: 0.02, y: 0.36 },
+            { r: 0.26, y: 0.44 },
+            { r: 0.2, y: 0.72 },
+            { r: 0.135, y: 1.62 },
+            { r: 0.12, y: 2.04 },
+            { r: 0.175, y: 2.18 },
+            { r: 0.125, y: 2.26 },
           ],
           segments: 16,
         },
         material: 'machined',
       },
+      // Side cryogenic deuterium coolant cylinder.
+      {
+        recipe: { kind: 'capsule', radius: 0.11, length: 0.34 },
+        at: [-0.26, 0.62, -0.18],
+        material: 'structure',
+      },
+      // Optical sensor dome mounted off the gimbal cheek.
+      {
+        recipe: { kind: 'sphere', radius: 0.11, cap: 0.65 },
+        at: [0.24, 0.68, 0.14],
+        material: 'armour',
+      },
+      // Magnetic focusing cooling rings hugging the tapered barrel throat.
+      ...[
+        [0.96, 0.19],
+        [1.32, 0.17],
+        [1.68, 0.155],
+      ].map(
+        ([y, r]): Piece => ({
+          recipe: { kind: 'torus', radius: r, tube: 0.032, sides: 16 },
+          at: [0, y, 0],
+          rotation: [Math.PI / 2, 0, 0],
+          material: 'structure',
+        }),
+      ),
       {
         recipe: { kind: 'sphere', radius: 0.13 },
-        at: [0, 2.3, 0],
+        at: [0, 2.32, 0],
         material: 'dark',
-        glow: { color: '#38bdf8', intensity: 3 },
+        glow: { color: '#38bdf8', intensity: 2.6 },
       },
       { recipe: { kind: 'pipe', from: 'feed', to: 'collar', radius: 0.035 }, material: 'plumbing' },
+      { recipe: { kind: 'pipe', from: 'return', to: 'reservoir', radius: 0.032 }, material: 'plumbing' },
     ],
   },
 
@@ -508,14 +565,27 @@ export const WEAPON_FITTINGS: Readonly<Record<WeaponId, FittingDef>> = {
     anchors: {
       magazine: [0.34, 0.16, -0.36],
       loader: [0.3, 0.72, -0.44],
+      'mag-p': [-0.34, 0.16, -0.36],
+      'load-p': [-0.3, 0.72, -0.44],
     },
     exposure: { impact: 1.3 },
     pieces: [
       barbette(),
       {
-        recipe: { kind: 'greeble', size: [0.9, 0.62, 1.0], chamfer: 0.05, density: 5, seed: 0x51ce },
+        recipe: { kind: 'greeble', size: [0.94, 0.64, 1.04], chamfer: 0.05, density: 5, seed: 0x51ce },
         at: [0, 0.82, 0],
         material: 'armour',
+      },
+      // Dorsal armored blast deflector ridge & electro-optical lock turret.
+      {
+        recipe: { kind: 'slab', size: [0.54, 0.18, 0.64], chamfer: 0.04 },
+        at: [0, 1.18, -0.18],
+        material: 'structure',
+      },
+      {
+        recipe: { kind: 'cylinder', radiusTop: 0.06, radiusBottom: 0.08, height: 0.16, sides: 10 },
+        at: [0, 1.3, -0.05],
+        material: 'machined',
       },
       ...[
         [-0.24, 0.24],
@@ -524,14 +594,15 @@ export const WEAPON_FITTINGS: Readonly<Record<WeaponId, FittingDef>> = {
         [0.24, -0.24],
       ].map(
         ([x, z]): Piece => ({
-          recipe: { kind: 'cylinder', radiusTop: 0.11, radiusBottom: 0.11, height: 0.14 },
-          at: [x as number, 1.15, z as number],
+          recipe: { kind: 'cylinder', radiusTop: 0.11, radiusBottom: 0.11, height: 0.16 },
+          at: [x as number, 1.16, z as number],
           rotation: [Math.PI / 2, 0, 0],
           material: 'dark',
-          glow: { color: '#c084fc', intensity: 2.2 },
+          glow: { color: '#c084fc', intensity: 2.0 },
         }),
       ),
       { recipe: { kind: 'pipe', from: 'magazine', to: 'loader', radius: 0.04 }, material: 'plumbing' },
+      { recipe: { kind: 'pipe', from: 'mag-p', to: 'load-p', radius: 0.04 }, material: 'plumbing' },
     ],
   },
 
@@ -543,6 +614,12 @@ export const WEAPON_FITTINGS: Readonly<Record<WeaponId, FittingDef>> = {
     size: 'M',
     family: 'smooth',
     flange: 0.56,
+    anchors: {
+      cryoA: [0.3, 0.06, 0.24],
+      ringA: [0.28, 0.82, 0.18],
+      cryoB: [-0.3, 0.06, -0.24],
+      ringB: [-0.28, 0.82, -0.18],
+    },
     exposure: { thermal: 1.6, oxidation: 0.6 },
     pieces: [
       barbette(),
@@ -550,30 +627,48 @@ export const WEAPON_FITTINGS: Readonly<Record<WeaponId, FittingDef>> = {
         recipe: {
           kind: 'lathe',
           profile: [
-            { r: 0.02, y: 0.4 },
-            { r: 0.22, y: 0.44 },
-            { r: 0.19, y: 0.62 },
-            { r: 0.16, y: 0.82 },
+            { r: 0.02, y: 0.36 },
+            { r: 0.28, y: 0.44 },
+            { r: 0.22, y: 0.66 },
+            { r: 0.16, y: 0.92 },
           ],
           segments: 14,
         },
         material: 'armour',
       },
+      // Gimballed cryo-emitter support struts anchoring base lathe to outer emitter rings.
+      ...[-1, 1].map(
+        (side): Piece => ({
+          recipe: { kind: 'capsule', radius: 0.055, length: 0.56 },
+          at: [side * 0.32, 0.92, 0],
+          rotation: [0, 0, -side * 0.35],
+          material: 'structure',
+        }),
+      ),
       {
-        recipe: { kind: 'crystal', shape: 'octahedron', radius: 0.46 },
-        at: [0, 1.15, 0],
+        recipe: { kind: 'crystal', shape: 'octahedron', radius: 0.44 },
+        at: [0, 1.2, 0],
         material: 'dark',
-        glow: { color: '#f43f5e', intensity: 2.4 },
+        glow: { color: '#f43f5e', intensity: 2.3 },
       },
       ...[0, 1, 2].map(
         (i): Piece => ({
-          recipe: { kind: 'torus', radius: 0.6, tube: 0.03, sides: 20 },
-          at: [0, 1.15, 0],
+          recipe: { kind: 'torus', radius: 0.58, tube: 0.032, sides: 20 },
+          at: [0, 1.2, 0],
           rotation: [0, (i * Math.PI) / 3, 0],
           material: 'dark',
-          glow: { color: '#fb7185', intensity: 1.6 },
+          glow: { color: '#fb7185', intensity: 1.5 },
         }),
       ),
+      // Upper field-collimator crown ring intersecting the gimbal ring tips.
+      {
+        recipe: { kind: 'torus', radius: 0.26, tube: 0.036, sides: 16 },
+        at: [0, 1.72, 0],
+        rotation: [Math.PI / 2, 0, 0],
+        material: 'machined',
+      },
+      { recipe: { kind: 'pipe', from: 'cryoA', to: 'ringA', radius: 0.032 }, material: 'plumbing' },
+      { recipe: { kind: 'pipe', from: 'cryoB', to: 'ringB', radius: 0.032 }, material: 'plumbing' },
     ],
   },
 
@@ -605,9 +700,9 @@ export const WEAPON_FITTINGS: Readonly<Record<WeaponId, FittingDef>> = {
           kind: 'lathe',
           profile: [
             { r: 0.06, y: 0.3 },
-            { r: 0.34, y: 0.4 },
-            { r: 0.34, y: 0.98 },
-            { r: 0.3, y: 1.16 },
+            { r: 0.35, y: 0.4 },
+            { r: 0.35, y: 0.98 },
+            { r: 0.31, y: 1.16 },
             { r: 0.26, y: 1.2 },
             { r: 0.22, y: 1.22 },
           ],
@@ -617,26 +712,35 @@ export const WEAPON_FITTINGS: Readonly<Record<WeaponId, FittingDef>> = {
       },
       // Ammunition drum, slung across the pod's back.
       {
-        recipe: { kind: 'capsule', radius: 0.21, length: 0.42 },
+        recipe: { kind: 'capsule', radius: 0.22, length: 0.44 },
         at: [0, 0.52, -0.42],
         rotation: [0, 0, Math.PI / 2],
         material: 'structure',
+      },
+      // Optical sensor pod mounted outboard.
+      {
+        recipe: { kind: 'sphere', radius: 0.1, cap: 0.7 },
+        at: [-0.32, 0.78, 0.08],
+        material: 'armour',
       },
       // Three barrels on a rotary head, standing proud of the cowling.
       ...[0, 1, 2].map((i): Piece => {
         const angle = (i * Math.PI * 2) / 3;
         return {
-          recipe: { kind: 'cylinder', radiusTop: 0.045, radiusBottom: 0.055, height: 1.5 },
+          recipe: { kind: 'cylinder', radiusTop: 0.045, radiusBottom: 0.055, height: 1.54 },
           at: [Math.cos(angle) * 0.13, 0.98, Math.sin(angle) * 0.13],
           material: 'machined',
         };
       }),
-      {
-        recipe: { kind: 'torus', radius: 0.2, tube: 0.035, sides: 14 },
-        at: [0, 1.62, 0],
-        rotation: [Math.PI / 2, 0, 0],
-        material: 'dark',
-      },
+      // Dual mid-barrel & muzzle cooling collar rings.
+      ...[1.32, 1.66].map(
+        (y): Piece => ({
+          recipe: { kind: 'torus', radius: 0.2, tube: 0.036, sides: 14 },
+          at: [0, y, 0],
+          rotation: [Math.PI / 2, 0, 0],
+          material: 'dark',
+        }),
+      ),
       { recipe: { kind: 'pipe', from: 'feed', to: 'drum', radius: 0.035 }, material: 'plumbing' },
       { recipe: { kind: 'pipe', from: 'drum', to: 'breech', radius: 0.03, bow: 0.08 }, material: 'plumbing' },
     ],
@@ -661,33 +765,46 @@ export const WEAPON_FITTINGS: Readonly<Record<WeaponId, FittingDef>> = {
       barbette(0.54),
       // Receiver: a chamfered slab, welded plate rather than pressed metal.
       {
-        recipe: { kind: 'slab', size: [1.02, 0.44, 0.92], chamfer: 0.07 },
+        recipe: { kind: 'slab', size: [1.04, 0.44, 0.94], chamfer: 0.07 },
         at: [0, 0.62, 0],
         material: 'armour',
       },
+      // Sloped trunnion cheek armor plates flanking the cluster.
+      ...[-1, 1].map(
+        (side): Piece => ({
+          recipe: { kind: 'slab', size: [0.16, 0.56, 0.68], chamfer: 0.03 },
+          at: [side * 0.48, 0.84, 0],
+          material: 'structure',
+        }),
+      ),
       // Capacitor bank behind the breech, greebled so it reads as machinery.
       {
-        recipe: { kind: 'greeble', size: [0.72, 0.34, 0.36], chamfer: 0.04, density: 9, seed: 0xc0117 },
+        recipe: { kind: 'greeble', size: [0.74, 0.36, 0.38], chamfer: 0.04, density: 9, seed: 0xc0117 },
         at: [0, 0.98, -0.42],
         material: 'structure',
       },
-      // Four coil tubes.
+      // Four coil tubes + muzzle collars.
       ...[
         [-0.19, -0.19],
         [0.19, -0.19],
         [-0.19, 0.19],
         [0.19, 0.19],
-      ].map(
-        ([x, z]): Piece => ({
-          recipe: { kind: 'cylinder', radiusTop: 0.055, radiusBottom: 0.07, height: 1.45 },
+      ].flatMap(([x, z]): Piece[] => [
+        {
+          recipe: { kind: 'cylinder', radiusTop: 0.055, radiusBottom: 0.072, height: 1.48 },
           at: [x as number, 1.5, z as number],
           material: 'machined',
-        }),
-      ),
+        },
+        {
+          recipe: { kind: 'cylinder', radiusTop: 0.078, radiusBottom: 0.078, height: 0.12 },
+          at: [x as number, 2.16, z as number],
+          material: 'dark',
+        },
+      ]),
       // Accelerator coils encircling the cluster: the emissive signature.
       ...[1.06, 1.5, 1.94].map(
         (y): Piece => ({
-          recipe: { kind: 'torus', radius: 0.32, tube: 0.05, sides: 18 },
+          recipe: { kind: 'torus', radius: 0.33, tube: 0.05, sides: 18 },
           at: [0, y, 0],
           rotation: [Math.PI / 2, 0, 0],
           material: 'dark',
@@ -720,16 +837,32 @@ export const WEAPON_FITTINGS: Readonly<Record<WeaponId, FittingDef>> = {
       barbette(0.58, 0.36),
       // Breech block.
       {
-        recipe: { kind: 'greeble', size: [0.86, 0.56, 1.0], chamfer: 0.06, density: 6, seed: 0x7a11 },
+        recipe: { kind: 'greeble', size: [0.9, 0.58, 1.02], chamfer: 0.06, density: 6, seed: 0x7a11 },
         at: [0, 0.7, 0],
         material: 'armour',
       },
+      // Hydro-pneumatic recoil shock cylinders flanking the breech.
+      ...[-0.38, 0.38].map(
+        (x): Piece => ({
+          recipe: { kind: 'cylinder', radiusTop: 0.065, radiusBottom: 0.075, height: 0.52 },
+          at: [x, 1.02, -0.18],
+          material: 'structure',
+        }),
+      ),
       // The rails themselves — two long chamfered slabs.
       ...[-0.26, 0.26].map(
         (x): Piece => ({
           recipe: { kind: 'slab', size: [0.15, 2.1, 0.34], chamfer: 0.03 },
           at: [x, 1.95, 0],
           material: 'machined',
+        }),
+      ),
+      // Transverse magnetic accelerator yoke frames clamping the twin rails.
+      ...[1.28, 1.82, 2.38].map(
+        (y): Piece => ({
+          recipe: { kind: 'slab', size: [0.84, 0.14, 0.44], chamfer: 0.03 },
+          at: [0, y, 0],
+          material: 'structure',
         }),
       ),
       // Armature gap between the rails: where the slug is accelerated. Kept
@@ -743,7 +876,7 @@ export const WEAPON_FITTINGS: Readonly<Record<WeaponId, FittingDef>> = {
       },
       // Muzzle brace, tying the rails together so they do not splay.
       {
-        recipe: { kind: 'slab', size: [0.92, 0.16, 0.5], chamfer: 0.04 },
+        recipe: { kind: 'slab', size: [0.94, 0.18, 0.52], chamfer: 0.04 },
         at: [0, 3.02, 0],
         material: 'structure',
       },
@@ -781,33 +914,50 @@ export const HYPER_SHUNT_HOUSING: FittingDef = {
   anchors: {
     tap: [0.3, 0.06, 0.6],
     manifold: [0.5, 0.42, 0.2],
+    'tap-p': [-0.3, 0.06, 0.6],
+    'manifold-p': [-0.5, 0.42, 0.2],
   },
   exposure: { thermal: 1.3, grime: 1.2 },
   pieces: [
     {
-      recipe: { kind: 'greeble', size: [1.5, 0.62, 2.3], chamfer: 0.1, density: 3, seed: 0x5401 },
+      recipe: { kind: 'greeble', size: [1.54, 0.62, 2.34], chamfer: 0.1, density: 4, seed: 0x5401 },
       at: [0, 0.31, 0],
       material: 'armour',
     },
+    // Dorsal stepped cooling shroud ribs over the shunt capacitor spine.
+    ...[-0.68, -0.22, 0.24].map(
+      (z): Piece => ({
+        recipe: { kind: 'slab', size: [1.2, 0.14, 0.32], chamfer: 0.03 },
+        at: [0, 0.66, z],
+        material: 'structure',
+      }),
+    ),
     // Field vents down each flank.
     ...[-1, 1].flatMap((side) =>
       [-0.66, 0, 0.66].map(
         (z): Piece => ({
-          recipe: { kind: 'slab', size: [0.06, 0.3, 0.44], chamfer: 0.02 },
-          at: [side * 0.79, 0.34, z],
+          recipe: { kind: 'slab', size: [0.07, 0.3, 0.44], chamfer: 0.02 },
+          at: [side * 0.8, 0.34, z],
           material: 'dark',
-          glow: { color: '#38bdf8', intensity: 2.4 },
+          glow: { color: '#38bdf8', intensity: 2.2 },
         }),
       ),
     ),
-    // Beacon horn — a shunt jumps between beacon corridors, so it points home.
+    // Beacon horn with armored collar ring — jumps between beacon corridors.
     {
-      recipe: { kind: 'cylinder', radiusTop: 0.16, radiusBottom: 0.07, height: 0.5 },
-      at: [0, 0.82, 0.72],
+      recipe: { kind: 'cylinder', radiusTop: 0.22, radiusBottom: 0.28, height: 0.18, sides: 8 },
+      at: [0, 0.66, 0.72],
+      rotation: [0.5, 0, 0],
+      material: 'structure',
+    },
+    {
+      recipe: { kind: 'cylinder', radiusTop: 0.16, radiusBottom: 0.08, height: 0.52 },
+      at: [0, 0.84, 0.74],
       rotation: [0.5, 0, 0],
       material: 'machined',
     },
     { recipe: { kind: 'pipe', from: 'tap', to: 'manifold', radius: 0.04 }, material: 'plumbing' },
+    { recipe: { kind: 'pipe', from: 'tap-p', to: 'manifold-p', radius: 0.04 }, material: 'plumbing' },
   ],
 };
 

@@ -18,12 +18,29 @@ export const CAMERA_PRESETS: ReadonlyArray<{ id: CameraPreset; label: string }> 
 ] as const;
 
 export const PRESET_POSITIONS: Record<CameraPreset, [number, number, number]> = {
-  hero: [21, 11, 26],
+  hero: [22, 10.5, 27],
   front: [0, 3, 30],
   side: [30, 3, 0],
   top: [0, 32, 0.01],
   rear: [0, 5, -30],
 };
+
+export type CinematicCut =
+  | 'gantry_dolly'
+  | 'docking_umbilical'
+  | 'chase_cam'
+  | 'turret_ots'
+  | 'flyby_pass'
+  | 'orbital_horizon';
+
+export const CINEMATIC_CUTS: ReadonlyArray<{ id: CinematicCut; label: string }> = [
+  { id: 'gantry_dolly', label: 'Gantry Dolly' },
+  { id: 'docking_umbilical', label: 'Dock Umbilical' },
+  { id: 'chase_cam', label: 'Chase Cam' },
+  { id: 'turret_ots', label: 'Turret OTS' },
+  { id: 'flyby_pass', label: 'Flyby Pass' },
+  { id: 'orbital_horizon', label: 'Orbital Horizon' },
+] as const;
 
 export type EnvironmentId = 'drydock' | 'nebula' | 'asteroid';
 

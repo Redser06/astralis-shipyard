@@ -1,9 +1,16 @@
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { Bloom, EffectComposer, SMAA } from '@react-three/postprocessing';
-import { ACESFilmicToneMapping, PCFShadowMap, Vector3, type Group } from 'three';
-import type { Blueprint, MissionState } from '../domain/types';
+import {
+  ACESFilmicToneMapping,
+  MathUtils,
+  PCFShadowMap,
+  PerspectiveCamera,
+  Vector3,
+  type Group,
+} from 'three';
+import type { Blueprint, MissionState, MissionTelemetry, ShipStats } from '../domain/types';
 import { Ship } from './Ship';
 import { SceneEnvironment } from './environments/Environments';
 import {
@@ -21,6 +28,7 @@ import { CinematicDirector, type CinematicCut } from './camera/CinematicDirector
 /**
  * Moves the camera to a preset, then gets out of the way so orbit control is
  * never fought over. Interpolation stops as soon as it is close enough.
+ * Also smoothly restores baseline 45° FOV when returning from cinematic warp cuts.
  */
 function CameraRig({ preset }: { preset: CameraPreset }) {
   const { camera } = useThree();
@@ -32,6 +40,10 @@ function CameraRig({ preset }: { preset: CameraPreset }) {
   }, [preset]);
 
   useFrame((_, delta) => {
+    if (camera instanceof PerspectiveCamera && Math.abs(camera.fov - 45) > 0.02) {
+      camera.fov = MathUtils.damp(camera.fov, 45, 4.0, Math.min(0.05, delta));
+      camera.updateProjectionMatrix();
+    }
     if (!animating.current) return;
     camera.position.lerp(target, 1 - Math.pow(0.0015, delta));
     camera.lookAt(0, 0, 0);
@@ -88,7 +100,11 @@ export interface ViewportProps {
   isRepairing?: boolean;
   showDrones?: boolean;
   showShuttles?: boolean;
+  dockingConnected?: boolean;
   missionState?: MissionState | null;
+  missionProgress?: number;
+  missionTelemetry?: MissionTelemetry | null;
+  shipStats?: ShipStats;
 }
 
 function detectWebGL2(): boolean {
@@ -134,12 +150,25 @@ export function Viewport({
   isRepairing = false,
   showDrones = false,
   showShuttles,
+  dockingConnected = true,
   missionState,
+  missionProgress = 0,
+  missionTelemetry = null,
+  shipStats,
 }: ViewportProps) {
   // Evaluated once on mount rather than during render, so SSR/tests do not
   // touch the DOM unexpectedly.
   const [supported, setSupported] = useState<boolean | null>(null);
   useEffect(() => setSupported(detectWebGL2()), []);
+
+  const liveShipRef = useRef<Group | null>(null);
+  const handleShipMount = useCallback(
+    (group: Group) => {
+      liveShipRef.current = group;
+      onShipReady?.(group);
+    },
+    [onShipReady],
+  );
 
   if (supported === false) return <UnsupportedNotice />;
 
@@ -147,7 +176,7 @@ export function Viewport({
     <Canvas
       shadows={{ type: PCFShadowMap }}
       dpr={[1, 2]}
-      camera={{ position: PRESET_POSITIONS.hero, fov: 45, near: 0.1, far: 400 }}
+      camera={{ position: PRESET_POSITIONS.hero, fov: 45, near: 0.1, far: 600 }}
       gl={{
         antialias: false, // SMAA in the composer handles this
         toneMapping: ACESFilmicToneMapping,
@@ -158,7 +187,14 @@ export function Viewport({
       }}
     >
       <Suspense fallback={null}>
-        <SceneEnvironment environment={environment} intensity={lightIntensity} />
+        <SceneEnvironment
+          environment={environment}
+          intensity={lightIntensity}
+          blueprint={blueprint}
+          missionState={missionState}
+          missionProgress={missionProgress}
+          dockingConnected={dockingConnected}
+        />
         <LightingRig intensity={lightIntensity} />
 
         <Ship
@@ -168,11 +204,23 @@ export function Viewport({
           burning={burning}
           assemblyProgress={assemblyProgress}
           missionState={missionState}
-          onReady={onShipReady}
+          missionProgress={missionProgress}
+          missionTelemetry={missionTelemetry}
+          shipStats={shipStats}
+          onReady={handleShipMount}
         />
 
-        <DroneSwarm enabled={showDrones} isRepairing={isRepairing} />
-        <ShuttleCraft enabled={showShuttles ?? environment === 'drydock'} />
+        <DroneSwarm
+          enabled={showDrones}
+          isRepairing={isRepairing}
+          blueprint={blueprint}
+          missionState={missionState}
+        />
+        <ShuttleCraft
+          enabled={showShuttles ?? environment === 'drydock'}
+          missionState={missionState}
+          missionProgress={missionProgress}
+        />
 
         {/*
           No PCSS here, deliberately.
@@ -190,7 +238,14 @@ export function Viewport({
           console warning and the same shadows.
         */}
         {cinematicActive ? (
-          <CinematicDirector active={true} cut={cinematicCut} />
+          <CinematicDirector
+            active={true}
+            cut={cinematicCut}
+            shipRef={liveShipRef}
+            missionState={missionState}
+            missionTelemetry={missionTelemetry}
+            burning={burning}
+          />
         ) : (
           <>
             <CameraRig preset={cameraPreset} />
@@ -230,9 +285,9 @@ export function Viewport({
         */}
         <EffectComposer enableNormalPass={false}>
           <Bloom
-            intensity={mode === 'thermal' ? 1.1 : 0.55}
-            luminanceThreshold={mode === 'wireframe' ? 0.1 : 0.72}
-            luminanceSmoothing={0.28}
+            intensity={mode === 'thermal' ? 1.05 : 0.45}
+            luminanceThreshold={mode === 'wireframe' ? 0.15 : 0.84}
+            luminanceSmoothing={0.26}
             mipmapBlur
           />
           <SMAA />

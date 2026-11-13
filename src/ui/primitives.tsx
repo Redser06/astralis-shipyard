@@ -36,14 +36,20 @@ export function Toggle({
   checked,
   onChange,
   hint,
+  disabled = false,
 }: {
   label: string;
   checked: boolean;
   onChange: (next: boolean) => void;
   hint?: string;
+  disabled?: boolean;
 }) {
   return (
-    <label className="flex cursor-pointer items-center justify-between gap-3 py-1.5">
+    <label
+      className={`flex items-center justify-between gap-3 py-1.5 ${
+        disabled ? 'cursor-not-allowed opacity-55' : 'cursor-pointer'
+      }`}
+    >
       <span className="text-sm text-slate-300">
         {label}
         {hint && <span className="block text-[11px] text-slate-500">{hint}</span>}
@@ -53,7 +59,10 @@ export function Toggle({
         role="switch"
         aria-checked={checked}
         aria-label={label}
-        onClick={() => onChange(!checked)}
+        disabled={disabled}
+        onClick={() => {
+          if (!disabled) onChange(!checked);
+        }}
         className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
           checked ? 'bg-neon-cyan' : 'bg-slate-700'
         }`}

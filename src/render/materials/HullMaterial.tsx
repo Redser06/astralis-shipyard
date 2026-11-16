@@ -1,6 +1,7 @@
 import { AdditiveBlending, Color, DoubleSide } from 'three';
 import { useMemo } from 'react';
 import type { MaterialSpec, WearChannels } from '../../domain/types';
+import { getHullTextureSet } from './hullTextures';
 import { weatheredPbr, type RenderMode } from './renderModes';
 
 interface HullMaterialProps {
@@ -8,6 +9,8 @@ interface HullMaterialProps {
   accentColor: string;
   mode: RenderMode;
   wear: WearChannels;
+  /** UV tiling density for procedural armor plating seams and normal bevels. */
+  textureRepeat?: number;
 }
 
 /**
@@ -15,8 +18,22 @@ interface HullMaterialProps {
  * Fiber owns the lifecycle and disposes it on unmount. The prototype leaked
  * every material it ever created; this makes that failure mode unexpressible.
  */
-export function HullMaterial({ spec, accentColor, mode, wear }: HullMaterialProps) {
+export function HullMaterial({
+  spec,
+  accentColor,
+  mode,
+  wear,
+  textureRepeat = 2.5,
+}: HullMaterialProps) {
   const pbr = useMemo(() => weatheredPbr(spec, wear), [spec, wear]);
+  const textures = useMemo(
+    () => getHullTextureSet(spec.id, textureRepeat),
+    [spec.id, textureRepeat],
+  );
+  const thermalColor = useMemo(
+    () => new Color().setHSL(0.62 - wear.thermal * 0.55, 0.95, 0.42),
+    [wear.thermal],
+  );
 
   switch (mode) {
     case 'wireframe':
@@ -38,10 +55,12 @@ export function HullMaterial({ spec, accentColor, mode, wear }: HullMaterialProp
       return (
         <meshStandardMaterial
           color="#05070c"
-          emissive={new Color().setHSL(0.62 - wear.thermal * 0.55, 0.95, 0.42)}
+          emissive={thermalColor}
           emissiveIntensity={1.5}
-          roughness={1}
-          metalness={0}
+          normalMap={textures?.normalMap ?? null}
+          normalScale={textures?.normalScale}
+          roughness={0.85}
+          metalness={0.08}
         />
       );
 
@@ -52,10 +71,14 @@ export function HullMaterial({ spec, accentColor, mode, wear }: HullMaterialProp
           color={pbr.color}
           roughness={pbr.roughness}
           metalness={pbr.metalness}
+          map={textures?.map ?? null}
+          normalMap={textures?.normalMap ?? null}
+          normalScale={textures?.normalScale}
+          roughnessMap={textures?.roughnessMap ?? null}
           // With image-based lighting present this is what makes metal read as
           // metal. Without an environment to reflect, a metalness-0.9 surface
           // is correctly black — which is exactly how the prototype rendered.
-          envMapIntensity={1.15}
+          envMapIntensity={1.25}
         />
       );
   }

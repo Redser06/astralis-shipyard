@@ -172,6 +172,13 @@ export type MissionState =
   | 'return_transit'
   | 'repair';
 
+export type CombatAction =
+  | 'scanning'
+  | 'evading'
+  | 'firing_salvo'
+  | 'countermeasures'
+  | 'standby';
+
 export interface MissionTelemetry {
   state: MissionState;
   progress: number; // 0.0 -> 1.0 within phase
@@ -180,6 +187,15 @@ export interface MissionTelemetry {
   activeThreats: number;
   droneSorties: number;
   combatLog: string[];
+  velocityKms: number;
+  throttlePct: number;
+  altitudeKm: number;
+  headingDeg: number;
+  bankDeg: number;
+  dockingClampsEngaged: boolean;
+  weaponsHot: boolean;
+  combatAction: CombatAction;
+  subPhaseLabel: string;
 }
 
 export interface ShipStats {

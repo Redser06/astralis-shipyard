@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from 'react';
-import { CatmullRomCurve3, Shape, Vector2, Vector3 } from 'three';
+import { CatmullRomCurve3, Euler, Quaternion, Shape, Vector2, Vector3 } from 'three';
 import {
   GREEBLE_STUD_HEIGHT,
   MATERIAL_HINTS,
@@ -32,12 +32,21 @@ import { SurfaceDamage } from '../damage/Damage';
  */
 
 const asTuple = (v: Vec3): [number, number, number] => [v[0], v[1], v[2]];
+const UP_AXIS = new Vector3(0, 1, 0);
+const FLANGE_BOLTS = [0, 1, 2, 3, 4, 5, 6, 7] as const;
+
+function tangentEuler(dir: Vector3): [number, number, number] {
+  const unit = dir.clone().normalize();
+  const q = new Quaternion().setFromUnitVectors(UP_AXIS, unit);
+  const e = new Euler().setFromQuaternion(q);
+  return [e.x, e.y, e.z];
+}
 
 /* --------------------------- Shared fittings --------------------------- */
 
 /**
- * The visible base every mount gets: a bolt ring and a short collar, sunk
- * fractionally into the plate so no seam of daylight shows at the joint.
+ * The visible base every mount gets: a bolt ring, perimeter hex lugs, and a
+ * beveled collar sunk fractionally into the plate so no seam of daylight shows.
  */
 export function MountFlange({
   radius,
@@ -48,22 +57,47 @@ export function MountFlange({
   height?: number;
   color?: string;
 }) {
+  const boltRadius = Math.max(0.016, Math.min(0.036, radius * 0.065));
+  const boltOrbit = radius * 0.88;
+
   return (
     <group>
+      {/* Main tapered mounting collar */}
       <mesh position={[0, height / 2 - 0.03, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[radius * 0.84, radius, height, 12]} />
-        <meshStandardMaterial color={color} roughness={0.6} metalness={0.85} />
+        <cylinderGeometry args={[radius * 0.82, radius, height, 14]} />
+        <meshStandardMaterial color={color} roughness={0.55} metalness={0.85} />
       </mesh>
+      {/* Secondary upper flange ring */}
+      <mesh position={[0, height - 0.025, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[radius * 0.72, radius * 0.84, 0.032, 14]} />
+        <meshStandardMaterial color="#374151" roughness={0.48} metalness={0.88} />
+      </mesh>
+      {/* Base gasket torus seated cleanly into hull skin */}
       <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-        <torusGeometry args={[radius * 0.95, 0.03, 6, 16]} />
+        <torusGeometry args={[radius * 0.95, 0.028, 6, 16]} />
         <meshStandardMaterial color="#1e293b" roughness={0.5} metalness={0.9} />
       </mesh>
+      {/* 8 machined hex perimeter flange bolts */}
+      {FLANGE_BOLTS.map((i) => {
+        const a = (i * Math.PI) / 4;
+        return (
+          <mesh
+            key={`bolt-${i}`}
+            position={[Math.cos(a) * boltOrbit, height - 0.02, Math.sin(a) * boltOrbit]}
+            castShadow
+          >
+            <cylinderGeometry args={[boltRadius, boltRadius, 0.035, 6]} />
+            <meshStandardMaterial color="#64748b" roughness={0.35} metalness={0.9} />
+          </mesh>
+        );
+      })}
     </group>
   );
 }
 
 /**
- * A run of pipe between two points that are both on real geometry.
+ * A run of pipe between two points that are both on real geometry, outfitted
+ * with swaged hex end glands and a central support collar.
  *
  * TubeGeometry along a Catmull-Rom, declared as JSX so the reconciler owns the
  * geometry's lifetime. The curve itself is a plain maths object, not a GPU
@@ -87,21 +121,44 @@ export function Conduit({
   const [ax, ay, az] = from;
   const [bx, by, bz] = to;
 
-  const curve = useMemo(
-    () =>
-      new CatmullRomCurve3(
-        pipeRoute([ax, ay, az], [bx, by, bz], bow).map(
-          (point) => new Vector3(point[0], point[1], point[2]),
-        ),
+  const { curve, startRot, midPos, midRot, endRot } = useMemo(() => {
+    const c = new CatmullRomCurve3(
+      pipeRoute([ax, ay, az], [bx, by, bz], bow).map(
+        (point) => new Vector3(point[0], point[1], point[2]),
       ),
-    [ax, ay, az, bx, by, bz, bow],
-  );
+    );
+    const m = c.getPoint(0.5);
+    return {
+      curve: c,
+      startRot: tangentEuler(c.getTangent(0)),
+      midPos: [m.x, m.y, m.z] as [number, number, number],
+      midRot: tangentEuler(c.getTangent(0.5)),
+      endRot: tangentEuler(c.getTangent(1)),
+    };
+  }, [ax, ay, az, bx, by, bz, bow]);
+
+  const glandR = radius * 1.48;
+  const glandH = radius * 1.85;
 
   return (
-    <mesh castShadow>
-      <tubeGeometry args={[curve, segments, radius, 6, false]} />
-      <meshStandardMaterial color={color} roughness={0.55} metalness={0.8} />
-    </mesh>
+    <group>
+      <mesh castShadow>
+        <tubeGeometry args={[curve, segments, radius, 8, false]} />
+        <meshStandardMaterial color={color} roughness={0.48} metalness={0.82} />
+      </mesh>
+      <mesh position={[ax, ay, az]} rotation={startRot} castShadow>
+        <cylinderGeometry args={[glandR, glandR, glandH, 6]} />
+        <meshStandardMaterial color="#334155" roughness={0.4} metalness={0.88} />
+      </mesh>
+      <mesh position={midPos} rotation={midRot} castShadow>
+        <cylinderGeometry args={[glandR * 0.92, glandR * 0.92, glandH * 1.15, 8]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.45} metalness={0.86} />
+      </mesh>
+      <mesh position={[bx, by, bz]} rotation={endRot} castShadow>
+        <cylinderGeometry args={[glandR, glandR, glandH, 6]} />
+        <meshStandardMaterial color="#334155" roughness={0.4} metalness={0.88} />
+      </mesh>
+    </group>
   );
 }
 
